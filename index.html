@@ -1,0 +1,617 @@
+<!--
+  Project:        Timeline Dashboard
+  File:           index.html
+
+  Author:         Jordan Roberts <jordan.roberts4251@gmail.com>
+
+  Created:        2026-04-02
+  Last Updated:   2026-04-09
+
+  Description:
+    Tool for viewing large amounts of time series data with a scrollable heatmap
+  Copyright:
+    © 2026 Jordan Roberts
+
+  v0.4.3 — Signed metrics, column sort, sample data
+    - Volume/net toggle on signed metric tabs
+    - Negative palette ramps for diverging color scale
+    - Column sort in day log (click headers)
+    - Financial + IT Ticketing sample datasets
+    - Three-card sample data chooser
+    - Two-tier multi-select: collapsed day list + focused day logs
+    - Promote/demote days between tiers; auto-focus ≤7 days
+    - Peek-in-place on collapsed rows; highlight breakdown on hover
+    - Toolbar consolidated into hamburger menu
+    - Year gap spacer when Dec 31 is Saturday
+    - focusedDays persisted in state export/import
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timeline Dashboard v0.4.3</title>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+          rel="stylesheet">
+    <link rel="stylesheet" href="css/dashboard.css">
+</head>
+<body>
+<div class="app">
+    <div class="layout" style="position:relative;">
+        <div class="sidebar-wrapper" id="sidebarWrapper">
+            <div class="sidebar" id="sidebar">
+                <div class="sidebar-pad-top"></div>
+                <div id="yearSlots"></div>
+                <div class="sidebar-pad-bottom"></div>
+            </div>
+        </div>
+        <button class="sidebar-toggle" id="sidebarToggle" title="Toggle year nav">
+            <svg viewBox="0 0 24 24">
+                <polyline points="15 18 9 12 15 6"/>
+            </svg>
+        </button>
+        <div class="main">
+            <div class="top-bar">
+                <div class="filter-bar" id="filterBar"></div>
+                <div class="toolbar-menu-wrap">
+                    <button class="toolbar-icon-btn" id="settingsBtn" title="Settings">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" fill="none" stroke="currentColor"
+                                  stroke-width="2"/>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+                                  fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                    </button>
+                    <button class="toolbar-icon-btn" id="helpModalBtn" title="Help &amp; info">?</button>
+                    <button class="toolbar-menu-btn" id="toolbarMenuBtn" title="Menu">
+                        <svg viewBox="0 0 24 24">
+                            <line x1="3" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2"
+                                  stroke-linecap="round"/>
+                            <line x1="3" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2"
+                                  stroke-linecap="round"/>
+                            <line x1="3" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2"
+                                  stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                    <div class="toolbar-dropdown" id="toolbarDropdown">
+                        <label class="toolbar-dropdown-item">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            Load CSV
+                            <input type="file" accept=".csv,.tsv,.txt" id="csvInput" style="display:none;">
+                        </label>
+                        <button class="toolbar-dropdown-item" id="exportStateBtn">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                                <polyline points="17 21 17 13 7 13 7 21"/>
+                                <polyline points="7 3 7 8 15 8"/>
+                            </svg>
+                            Save State
+                        </button>
+                        <label class="toolbar-dropdown-item">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M3 15v4c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2v-4M17 8l-5-5-5 5"/>
+                                <path d="M12 3v12"/>
+                            </svg>
+                            Load State
+                            <input type="file" accept=".json" id="loadStateInput" style="display:none;">
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="content-area" id="contentArea"></div>
+            <div class="metric-tab-bar" id="metricTabBar"></div>
+            <div class="heatmap-container">
+                <div class="heatmap-viewport">
+                    <div class="day-labels-fixed" id="dayLabels">
+                        <span data-dow="0"></span><span data-dow="1">Mo</span><span data-dow="2"></span><span
+                            data-dow="3">We</span><span data-dow="4"></span><span data-dow="5">Fr</span><span
+                            data-dow="6"></span>
+                    </div>
+                    <div class="heatmap-inner" id="heatmapInner">
+                        <div class="month-markers" id="monthMarkers"></div>
+                        <div class="heatmap-track" id="heatmapTrack"></div>
+                    </div>
+                </div>
+                <div class="heatmap-footer-left">
+                    <button class="sample-reset-btn" id="sampleResetBtn" style="display:none;"
+                            title="Back to sample chooser">
+                        <svg viewBox="0 0 24 24">
+                            <polyline points="15 18 9 12 15 6"/>
+                        </svg>
+                    </button>
+                    <span class="data-source-indicator" id="dataSourceIndicator"></span>
+                    <div class="help-toggle">?
+                        <div class="help-tooltip-content">
+                            <kbd>Click</kbd> select day<br>
+                            <kbd>Ctrl</kbd>+<kbd>Click</kbd> multi-select day<br>
+                            <kbd>Shift</kbd>+<kbd>Click</kbd> select day of week<br>
+                            <kbd>Alt</kbd>+<kbd>Click</kbd> select week (Sun–Sat)<br>
+                            <kbd>W</kbd>+<kbd>Click</kbd> add 7 days from cell<br>
+                            <kbd>M</kbd>+<kbd>Click</kbd> select month<br>
+                            <kbd>Y</kbd>+<kbd>Click</kbd> select year<br>
+                            <kbd>Ctrl</kbd>+<kbd>A</kbd> select all · <kbd>Esc</kbd> clear<br>
+                            <kbd>←</kbd><kbd>→</kbd> ±1 week · <kbd>↑</kbd><kbd>↓</kbd> ±1 day<br>
+                            <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Ctrl</kbd>+<kbd>Y</kbd> redo
+                        </div>
+                    </div>
+                </div>
+                <div class="heatmap-legend" id="heatmapLegend">
+                    <span>Less</span>
+                    <div class="legend-cell" style="background:var(--hm0)"></div>
+                    <div class="legend-cell" style="background:var(--hm1)"></div>
+                    <div class="legend-cell" style="background:var(--hm2)"></div>
+                    <div class="legend-cell" style="background:var(--hm3)"></div>
+                    <div class="legend-cell" style="background:var(--hm4)"></div>
+                    <span>More</span>
+                </div>
+                <div class="heatmap-tooltip" id="tooltip"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Help modal -->
+<div id="helpModalOverlay" class="help-modal-overlay" style="display:none;">
+    <div class="help-modal">
+        <div class="help-modal-header">
+            <div class="help-tabs">
+                <button class="help-tab active" data-tab="guide">Feature Guide</button>
+                <button class="help-tab" data-tab="roadmap">Roadmap</button>
+                <button class="help-tab" data-tab="changelog">What's New</button>
+            </div>
+            <button class="help-modal-close" id="helpModalClose">&times;</button>
+        </div>
+        <div class="help-modal-body">
+
+            <!-- TAB: Feature Guide -->
+            <div class="help-panel" id="helpPanelGuide">
+
+                <section class="help-section">
+                    <h4>Getting Started</h4>
+                    <p>Click the <strong>☰ menu</strong> in the top-right and choose <strong>Load CSV</strong> to open a
+                        timestamped dataset. The tool auto-detects the timestamp column, delimiter (comma, tab, pipe,
+                        semicolon), and column structure. You can also drag and drop a file anywhere on the page.</p>
+                    <p>The <strong>heatmap</strong> shows one cell per day, colored by record density. Click any cell to
+                        see that day's records in the log table below. The <strong>year sidebar</strong> on the left
+                        lets you jump between years — the label brightness indicates how much data each year contains.
+                    </p>
+                </section>
+
+                <section class="help-section">
+                    <h4>Selecting Days</h4>
+                    <p>Beyond clicking a single day, you can build complex selections using modifier keys:</p>
+                    <ul>
+                        <li><kbd>Ctrl</kbd>+<kbd>Click</kbd> — Add or remove individual days from a multi-selection</li>
+                        <li><kbd>Shift</kbd>+<kbd>Click</kbd> — Select all cells for that day of the week (e.g. all
+                            Mondays)
+                        </li>
+                        <li><kbd>Alt</kbd>+<kbd>Click</kbd> — Select a full week (Sunday–Saturday)</li>
+                        <li><kbd>W</kbd>+<kbd>Click</kbd> — Add 7 consecutive days starting from the clicked cell
+                            (always additive)
+                        </li>
+                        <li><kbd>M</kbd>+<kbd>Click</kbd> — Select an entire month</li>
+                        <li><kbd>Y</kbd>+<kbd>Click</kbd> — Select an entire year</li>
+                    </ul>
+                    <p>Hold <kbd>Ctrl</kbd> with any of the above to <strong>add to</strong> an existing selection
+                        instead of replacing it. Use <kbd>Ctrl</kbd>+<kbd>A</kbd> to select all, <kbd>Esc</kbd> to
+                        clear. Arrow keys navigate: <kbd>↑</kbd><kbd>↓</kbd> move ±1 day, <kbd>←</kbd><kbd>→</kbd> move
+                        ±1 week.</p>
+
+                    <h5>Focused View</h5>
+                    <p>When multiple days are selected, days with data appear as a <strong>collapsed list</strong> — one
+                        row per day showing the date and record count. Selections of 7 or fewer days are automatically
+                        expanded into <strong>focused view</strong> with full record tables.</p>
+                    <p>On each collapsed row: click the <span class="help-icon-btn"><svg viewBox="0 0 24 24"><polyline
+                            points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2.5"
+                            stroke-linecap="round" stroke-linejoin="round"/></svg></span> button to peek at records in
+                        place, or click <span class="help-icon-btn"><svg viewBox="0 0 24 24"><line x1="12" y1="5"
+                                                                                                   x2="12" y2="19"
+                                                                                                   stroke="currentColor"
+                                                                                                   stroke-width="2.5"
+                                                                                                   stroke-linecap="round"/><line
+                                x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2.5"
+                                stroke-linecap="round"/></svg></span> to promote the day to focused view. Focused days
+                        show a <span class="help-icon-btn"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"
+                                                                                          stroke="currentColor"
+                                                                                          stroke-width="2.5"
+                                                                                          stroke-linecap="round"/></svg></span>
+                        button to demote them back. This lets you investigate specific days while keeping the full
+                        selection visible.
+                    </p>
+
+                    <h5>Selection Summary</h5>
+                    <p>Any multi-day selection shows an aggregate <strong>Selection Summary</strong> panel above the log
+                        area. This includes total records, active vs. total days, and top values for primary/secondary
+                        columns. The summary updates live as you add or remove days from the selection.</p>
+                </section>
+
+                <section class="help-section">
+                    <h4>Filtering &amp; Highlighting</h4>
+                    <p>The <strong>filter bar</strong> shows faceted dropdowns for each column. Select values to narrow
+                        the dataset — excluded records disappear from the heatmap and log. Click <strong>+ N
+                            more</strong> to toggle additional filter columns.</p>
+                    <p>Each filter has a <strong>slide toggle</strong> in its dropdown footer (visible after selecting
+                        at least one value). The toggle switches between:</p>
+                    <ul>
+                        <li><strong>Filter mode</strong> (funnel icon on knob) — Excludes non-matching records</li>
+                        <li><strong>Highlight mode</strong> (highlighter icon on knob) — Keeps all records visible but
+                            overlays matching days with a colored radial gradient on the heatmap. The heatmap switches
+                            to grayscale so highlights stand out.
+                        </li>
+                    </ul>
+                    <p>In highlight mode, a <strong>color picker</strong> appears below the dropdown with 6 preset
+                        colors. Highlighted values are also colored in the log table. Multiple highlight filters can
+                        stack — overlapping colors compound with increasing opacity. Hover the record count on collapsed
+                        multi-select rows to see a per-filter breakdown.</p>
+                </section>
+
+                <section class="help-section">
+                    <h4>Notes</h4>
+                    <p>Add annotations at two levels:</p>
+                    <ul>
+                        <li><strong>Day notes</strong> — Click the pencil icon in the day header. Day notes appear as a
+                            sticky amber bar that pins to the top when scrolling through records.
+                        </li>
+                        <li><strong>Row notes</strong> — Click the speech-bubble icon on any record row. Row notes
+                            appear inline below the row, truncated to one line with a "Show more" toggle for longer
+                            text.
+                        </li>
+                    </ul>
+                    <p>Notes are stored in the <strong>state file</strong>, not in the original data. They persist
+                        across sessions when you save and load state.</p>
+                </section>
+
+                <section class="help-section">
+                    <h4>Saving Your Work</h4>
+                    <p>Open the <strong>☰ menu</strong> to access:</p>
+                    <ul>
+                        <li><strong>Save State</strong> — Downloads a JSON file containing your notes, filter settings,
+                            highlight colors, visible columns, theme, and focused days.
+                        </li>
+                        <li><strong>Load State</strong> — Restores a previously saved state file. Load your CSV first,
+                            then apply the state.
+                        </li>
+                    </ul>
+                    <p>You can also drag and drop CSV or JSON state files directly onto the page.</p>
+                </section>
+
+                <section class="help-section">
+                    <h4>Themes</h4>
+                    <p>Click the <strong>gear icon</strong> in the top-right toolbar to open Settings, where you can
+                        choose from 12 color themes. The theme changes the heatmap colors and all accent elements
+                        throughout the interface. Your choice is saved in the state file.</p>
+                </section>
+
+                <section class="help-section">
+                    <h4>Keyboard Shortcuts</h4>
+                    <table class="help-shortcuts-table">
+                        <tbody>
+                        <tr>
+                            <td><kbd>Click</kbd></td>
+                            <td>Select day</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Ctrl</kbd>+<kbd>Click</kbd></td>
+                            <td>Multi-select day</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Shift</kbd>+<kbd>Click</kbd></td>
+                            <td>Select day of week</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Alt</kbd>+<kbd>Click</kbd></td>
+                            <td>Select week (Sun–Sat)</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>W</kbd>+<kbd>Click</kbd></td>
+                            <td>Add 7 days from cell (always additive)</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>M</kbd>+<kbd>Click</kbd></td>
+                            <td>Select month</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Y</kbd>+<kbd>Click</kbd></td>
+                            <td>Select year</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Ctrl</kbd>+<kbd>A</kbd></td>
+                            <td>Select all</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Esc</kbd></td>
+                            <td>Clear selection</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>↑</kbd> <kbd>↓</kbd></td>
+                            <td>Navigate ±1 day</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>←</kbd> <kbd>→</kbd></td>
+                            <td>Navigate ±1 week</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td>
+                            <td>Undo selection</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Ctrl</kbd>+<kbd>Y</kbd></td>
+                            <td>Redo selection</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </section>
+
+            </div>
+
+            <!-- TAB: Roadmap -->
+            <div class="help-panel" id="helpPanelRoadmap" style="display:none;">
+
+                <section class="help-section">
+                    <h4>What is this tool?</h4>
+                    <p>Timeline Dashboard is a <strong>read-only investigation and annotation tool</strong> for large
+                        time series datasets. It lets you visually navigate years of timestamped records through a
+                        scrollable heatmap, drill into specific days, and annotate your findings — without ever
+                        modifying the source data.</p>
+                    <p>It runs entirely in your browser as a single HTML file. No server, no installation, no accounts.
+                        Load a CSV, investigate, annotate, save your state, and share it with colleagues.</p>
+                </section>
+
+                <section class="help-section">
+                    <h4>What isn't this tool?</h4>
+                    <ul>
+                        <li><strong>Not a data editor</strong> — The tool does not modify your source data. Notes and
+                            annotations live in a separate state layer.
+                        </li>
+                        <li><strong>Not an ETL pipeline</strong> — It consumes data but does not transform, clean, join,
+                            or export it.
+                        </li>
+                        <li><strong>Not a real-time dashboard</strong> — Data is loaded once per session. There is no
+                            live polling or auto-refresh.
+                        </li>
+                        <li><strong>Not a reporting tool (yet)</strong> — Exportable reports and charts are planned but
+                            not yet available.
+                        </li>
+                        <li><strong>Not a collaboration platform (yet)</strong> — State files can be shared manually.
+                            Server-based collaboration is on the roadmap.
+                        </li>
+                    </ul>
+                </section>
+
+                <section class="help-section">
+                    <h4>What will this tool be?</h4>
+
+                    <h5>Next up</h5>
+                    <ul>
+                        <li>Signed metric support — diverging color scale for financial and other signed data</li>
+                        <li>Column sort in day log — click headers to sort by any column</li>
+                        <li>Financial and ticketing sample datasets with chooser screen</li>
+                        <li>Light mode and expanded theme system</li>
+                    </ul>
+
+                    <h5>Mid-term</h5>
+                    <ul>
+                        <li>Drill-down reports exportable as PDF or HTML</li>
+                        <li>Inline visualizations: time-of-day distribution, trend lines, day-of-week patterns</li>
+                        <li>Comparison mode for two filter states, time ranges, or datasets</li>
+                        <li>Large file support via chunked loading</li>
+                    </ul>
+
+                    <h5>Long-term</h5>
+                    <ul>
+                        <li>Streaming data sources via WebSocket and REST APIs</li>
+                        <li>Server-hosted version with user accounts and shared dashboards</li>
+                        <li>Plugin system for custom metrics, columns, and integrations</li>
+                        <li>Embeddable widget for other web applications</li>
+                    </ul>
+                </section>
+
+                <section class="help-section">
+                    <h4>Guiding Principles</h4>
+                    <ul>
+                        <li><strong>Read-only by design.</strong> The tool observes data. It does not change it.</li>
+                        <li><strong>Zero infrastructure.</strong> Everything works in a single HTML file. No server
+                            required.
+                        </li>
+                        <li><strong>Schema-driven.</strong> Any CSV with a timestamp column works with zero
+                            configuration.
+                        </li>
+                        <li><strong>Progressive disclosure.</strong> Simple to start, powerful when you need it.</li>
+                        <li><strong>Performance over polish.</strong> Fast and responsive beats beautiful and slow.</li>
+                    </ul>
+                </section>
+
+            </div>
+
+            <!-- TAB: What's New -->
+            <div class="help-panel" id="helpPanelChangelog" style="display:none;">
+
+                <section class="help-section">
+                    <h4>v0.4.3</h4>
+                    <ul>
+                        <li>Signed metric support — volume/net toggle on tabs with signed columns</li>
+                        <li>Diverging color scale with negative palette ramps for all 12 themes</li>
+                        <li>Column sort — click any header to sort, persists across day switches</li>
+                        <li>Financial sample data — transactions with income/expenses</li>
+                        <li>IT Ticketing sample data — ticket lifecycle with response times</li>
+                        <li>Sample data chooser — three-card selection on empty state</li>
+                        <li>Count distinct aggregation type</li>
+                    </ul>
+                </section>
+
+                <section class="help-section">
+                    <h4>v0.4.2</h4>
+                    <ul>
+                        <li>Metric tabs — switchable heatmap views above the heatmap</li>
+                        <li>Configurable presets: count, sum, avg, min, max on any column</li>
+                        <li>Click active tab to edit, click + to add new presets</li>
+                        <li>Auto-detects numeric columns for metric configuration</li>
+                        <li>Metric presets persisted in state export/import</li>
+                    </ul>
+                </section>
+
+                <section class="help-section">
+                    <h4>v0.4.1</h4>
+                    <ul>
+                        <li>Hide days of week — toggle any day off in Settings</li>
+                        <li>Month boundary indicators — jagged line with glow + configurable color</li>
+                        <li>Month label alignment — labels at first full column of each month</li>
+                        <li>Auto-focus threshold — configurable in Settings</li>
+                        <li>W+click always additive (avoids Ctrl+W browser conflict)</li>
+                    </ul>
+                </section>
+
+                <section class="help-section">
+                    <h4>v0.4.0</h4>
+                    <ul>
+                        <li>Settings modal with theme/palette configuration</li>
+                        <li>Three-tab help modal: Feature Guide, Roadmap, What's New</li>
+                        <li>Send Feedback and Report a Bug actions</li>
+                    </ul>
+                </section>
+
+                <section class="help-section">
+                    <h4>v0.3.7</h4>
+                    <ul>
+                        <li>Help modal with comprehensive feature guide</li>
+                        <li>About &amp; Roadmap panel with project vision</li>
+                        <li>Palette picker accessible before loading data</li>
+                        <li>Inline SVG icon references in help text</li>
+                    </ul>
+                </section>
+
+                <section class="help-section">
+                    <h4>v0.3.6</h4>
+                    <ul>
+                        <li>Two-tier multi-select: collapsed day list + focused day logs</li>
+                        <li>Promote/demote days with peek-in-place</li>
+                        <li>Toolbar consolidated into hamburger menu</li>
+                        <li>Year gap spacer when Dec 31 is Saturday</li>
+                    </ul>
+                </section>
+
+                <section class="help-section">
+                    <h4>v0.3.5</h4>
+                    <ul>
+                        <li>Single undo step per selection action</li>
+                        <li>CSV delimiter: sep= header, pipe, semicolon auto-detection</li>
+                        <li>Timestamp validation on load with user-facing error</li>
+                        <li>Clear button updates on every filter change</li>
+                    </ul>
+                </section>
+
+                <section class="help-section">
+                    <h4>v0.3.4</h4>
+                    <ul>
+                        <li>W+click week selection (7 days from cell)</li>
+                        <li>Arrow key navigation in single-select mode</li>
+                        <li>Year range auto-trimming when filters are active</li>
+                        <li>Ctrl+Z / Ctrl+Y undo/redo for selections</li>
+                    </ul>
+                </section>
+
+                <section class="help-section">
+                    <h4>v0.3.3</h4>
+                    <ul>
+                        <li>12-palette theme picker</li>
+                        <li>Sticky day notes, left-pinned row notes</li>
+                        <li>Facet option cap with pagination</li>
+                        <li>Conditional highlight toggle</li>
+                    </ul>
+                </section>
+
+                <section class="help-section">
+                    <h4>Earlier versions</h4>
+                    <p>v0.1.0–v0.3.2: Modular architecture, generic schema-driven data model, filter/highlight system
+                        with radial gradients and grayscale, multi-select with selection summary, state export/import,
+                        drag-and-drop file loading, horizontal scroll with arrow indicators.</p>
+                </section>
+
+            </div>
+
+        </div>
+        <div class="help-modal-footer">
+            <a class="help-footer-link"
+               href="mailto:jordan.roberts4251@gmail.com?subject=Timeline%20Dashboard%20Feedback"
+               title="Send feedback via email">Send Feedback</a>
+            <button class="help-footer-link" id="reportBugBtn" title="Download state and open email">Report a Bug
+            </button>
+            <span class="help-footer-version">v0.4.3</span>
+        </div>
+    </div>
+</div>
+
+<!-- Settings modal -->
+<div id="settingsModalOverlay" class="help-modal-overlay" style="display:none;">
+    <div class="help-modal settings-modal">
+        <div class="help-modal-header">
+            <h3>Settings</h3>
+            <button class="help-modal-close" id="settingsModalClose">&times;</button>
+        </div>
+        <div class="help-modal-body">
+
+            <section class="help-section">
+                <h4>Theme</h4>
+                <p class="settings-description">Choose a color theme for the heatmap and interface accents.</p>
+                <div class="settings-palette-grid" id="settingsPaletteGrid"></div>
+            </section>
+
+            <section class="help-section">
+                <h4>Display</h4>
+                <p class="settings-description">Control which days of the week are visible on the heatmap.</p>
+                <div class="settings-dow-grid" id="settingsDowGrid">
+                    <label class="settings-dow"><input type="checkbox" data-dow="0" checked><span>Sun</span></label>
+                    <label class="settings-dow"><input type="checkbox" data-dow="1" checked><span>Mon</span></label>
+                    <label class="settings-dow"><input type="checkbox" data-dow="2" checked><span>Tue</span></label>
+                    <label class="settings-dow"><input type="checkbox" data-dow="3" checked><span>Wed</span></label>
+                    <label class="settings-dow"><input type="checkbox" data-dow="4" checked><span>Thu</span></label>
+                    <label class="settings-dow"><input type="checkbox" data-dow="5" checked><span>Fri</span></label>
+                    <label class="settings-dow"><input type="checkbox" data-dow="6" checked><span>Sat</span></label>
+                </div>
+                <label class="settings-toggle">
+                    <input type="checkbox" id="settingsMonthPadding">
+                    <span>Show month boundary indicators</span>
+                    <input type="color" id="settingsMonthColor" value="#ffffff" class="settings-color-input"
+                           title="Indicator color">
+                </label>
+            </section>
+
+            <section class="help-section">
+                <h4>Multi-select</h4>
+                <p class="settings-description">Days at or below this count are automatically expanded in focused
+                    view.</p>
+                <label class="settings-number-row">
+                    <span>Auto-focus threshold</span>
+                    <input type="number" id="settingsAutoFocus" min="0" max="365" value="7">
+                </label>
+            </section>
+
+        </div>
+    </div>
+</div>
+
+<!-- Note modal -->
+<div id="noteModalOverlay" class="note-modal-overlay" style="display:none;">
+    <div class="note-modal">
+        <div class="note-modal-header">
+            <h4 id="noteModalTitle">Add Note</h4>
+            <button class="note-modal-close" id="noteModalClose">&times;</button>
+        </div>
+        <div class="note-modal-body">
+            <textarea class="note-textarea" id="noteTextarea" placeholder="Enter your note..."></textarea>
+        </div>
+        <div class="note-modal-footer">
+            <button class="note-delete-btn" id="noteDeleteBtn" style="display:none;">Delete</button>
+            <button class="note-cancel-btn" id="noteCancelBtn">Cancel</button>
+            <button class="note-save-btn" id="noteSaveBtn">Save</button>
+        </div>
+    </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
