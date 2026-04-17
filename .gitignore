@@ -1,6 +1,24 @@
-/HANDOFF.md
-/bump.sh
-/build.sh
-/_deprecated/
-/.idea/
-/package.json
+# Build outputs
+dist/
+*.html.bak
+
+# Build tooling (local only, not for public repo)
+build.sh
+bump.sh
+
+# Internal development docs
+HANDOFF.md
+CHANGELOG.md
+_deprecated/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Node (in case contributors use npm tools for linting/formatting)
+node_modules/
+package-lock.json

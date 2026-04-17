@@ -12,6 +12,14 @@
   Copyright:
     © 2026 Jordan Roberts
 
+  v0.4.4 — Bug fixes and polish
+    - Drag & drop reliability fix
+    - Improved help and back button visibility
+    - Clearer empty state copy
+    - Smooth sidebar wheel scrolling
+    - GitHub Issues link in help footer
+    - Auto-detect date column setting
+
   v0.4.3 — Signed metrics, column sort, sample data
     - Volume/net toggle on signed metric tabs
     - Negative palette ramps for diverging color scale
@@ -30,7 +38,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Timeline Dashboard v0.4.3</title>
+    <title>Timeline Dashboard v0.4.4</title>
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
           rel="stylesheet">
     <link rel="stylesheet" href="css/dashboard.css">
@@ -385,23 +393,33 @@
                 <section class="help-section">
                     <h4>What will this tool be?</h4>
 
-                    <h5>Next up</h5>
+                    <h5>Next up (v0.4.5)</h5>
                     <ul>
-                        <li>Signed metric support — diverging color scale for financial and other signed data</li>
-                        <li>Column sort in day log — click headers to sort by any column</li>
-                        <li>Financial and ticketing sample datasets with chooser screen</li>
-                        <li>Light mode and expanded theme system</li>
+                        <li>Date column picker — choose the timestamp column on CSV load, with format detection (ISO,
+                            Oracle, US/EU, Unix epoch) and sample values shown per column
+                        </li>
+                        <li>Conditional month color picker — hidden unless month indicators are enabled</li>
+                        <li>Sample reset preserves theme — back button clears session state but keeps your palette
+                            choice
+                        </li>
                     </ul>
 
-                    <h5>Mid-term</h5>
+                    <h5>Mid-term (v0.5.x–v0.7.x)</h5>
                     <ul>
+                        <li>Async audit — CSV parsing and aggregation off the main thread so the UI stays responsive on
+                            large datasets
+                        </li>
+                        <li>Visible-window aggregation mode — heatmap colors scaled to what's on screen, not global, for
+                            sharper outlier detection
+                        </li>
                         <li>Drill-down reports exportable as PDF or HTML</li>
                         <li>Inline visualizations: time-of-day distribution, trend lines, day-of-week patterns</li>
                         <li>Comparison mode for two filter states, time ranges, or datasets</li>
                         <li>Large file support via chunked loading</li>
+                        <li>Light mode and expanded theme system</li>
                     </ul>
 
-                    <h5>Long-term</h5>
+                    <h5>Long-term (v0.7.x+)</h5>
                     <ul>
                         <li>Streaming data sources via WebSocket and REST APIs</li>
                         <li>Server-hosted version with user accounts and shared dashboards</li>
@@ -429,6 +447,20 @@
 
             <!-- TAB: What's New -->
             <div class="help-panel" id="helpPanelChangelog" style="display:none;">
+
+                <section class="help-section">
+                    <h4>v0.4.4</h4>
+                    <ul>
+                        <li>Drag &amp; drop reliability — no more flicker, properly ignores non-file drags</li>
+                        <li>Help and back buttons have better contrast and larger tap targets</li>
+                        <li>Empty state copy clarified — sample datasets highlighted as an option</li>
+                        <li>Smooth wheel scrolling on year sidebar</li>
+                        <li>GitHub Issues link in help footer as a fallback for feedback</li>
+                        <li>New setting: auto-detect date column on CSV load (default on; manual picker coming in
+                            v0.4.5)
+                        </li>
+                    </ul>
+                </section>
 
                 <section class="help-section">
                     <h4>v0.4.3</h4>
@@ -540,7 +572,9 @@
                title="Send feedback via email">Send Feedback</a>
             <button class="help-footer-link" id="reportBugBtn" title="Download state and open email">Report a Bug
             </button>
-            <span class="help-footer-version">v0.4.3</span>
+            <a class="help-footer-link" href="https://github.com/pc-you/timeline-dashboard/issues" target="_blank"
+               rel="noopener" title="Open issues on GitHub">GitHub Issues</a>
+            <span class="help-footer-version">v0.4.4</span>
         </div>
     </div>
 </div>
@@ -587,6 +621,17 @@
                 <label class="settings-number-row">
                     <span>Auto-focus threshold</span>
                     <input type="number" id="settingsAutoFocus" min="0" max="365" value="7">
+                </label>
+            </section>
+
+            <section class="help-section">
+                <h4>Data Import</h4>
+                <p class="settings-description">When loading a CSV, automatically use the first column whose header
+                    matches a known timestamp name. When off, you'll be prompted to pick the date column <em>(picker
+                        coming in v0.4.5)</em>.</p>
+                <label class="settings-toggle">
+                    <input type="checkbox" id="settingsAutoDetectDate" checked>
+                    <span>Auto-detect date column on CSV load</span>
                 </label>
             </section>
 

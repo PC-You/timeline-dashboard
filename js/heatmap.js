@@ -100,7 +100,7 @@ export function renderHeatmap() {
     const visibleRows = 7 - settings.hiddenDays.size;
     const cellSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cell-size')) || 13;
     const cellGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cell-gap')) || 3;
-    const heatmapHeight = visibleRows * (cellSize + cellGap) + 60;
+    const heatmapHeight = visibleRows * (cellSize + cellGap) + 80;
     container.style.setProperty('--heatmap-height', heatmapHeight + 'px');
 
     // Update day labels visibility

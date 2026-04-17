@@ -17,6 +17,7 @@ export const settings = {
     monthPadding: false,        // show month boundary indicators
     monthIndicatorColor: '#ffffff', // month boundary indicator color
     autoFocusThreshold: 7,      // multi-select auto-focus limit
+    autoDetectDateColumn: true, // auto-pick timestamp column on CSV load (v0.4.5 adds picker)
 };
 
 export const HIGHLIGHT_PRESETS = [

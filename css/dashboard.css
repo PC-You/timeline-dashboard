@@ -41,7 +41,7 @@
 
     /* Layout */
     --sidebar-width: 180px;
-    --heatmap-height: 182px;
+    --heatmap-height: 202px;
     --cell-size: 13px;
     --cell-gap: 3px;
     --week-px: 16px;
@@ -1449,8 +1449,28 @@ body {
     color: var(--text-muted);
     font-size: 0.88rem;
     text-align: center;
-    max-width: 400px;
+    max-width: 500px;
     line-height: 1.5;
+    margin: 0;
+}
+
+.empty-state-sample-hint {
+    color: var(--text-primary) !important;
+}
+
+.empty-state-sample-hint strong {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.empty-state kbd {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.78rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--text-primary);
 }
 
 .empty-state code {
@@ -1727,7 +1747,7 @@ body {
 .heatmap-viewport {
     overflow: hidden;
     height: 100%;
-    padding: 18px 0 12px 0;
+    padding: 18px 0 32px 0;
     position: relative;
 }
 
@@ -2020,7 +2040,7 @@ body {
 /* Heatmap footer: data source + help */
 .heatmap-footer-left {
     position: absolute;
-    bottom: 10px;
+    bottom: 8px;
     left: 54px;
     display: flex;
     align-items: center;
@@ -2028,28 +2048,29 @@ body {
 }
 
 .sample-reset-btn {
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     background: var(--surface-raised);
-    border: 1px solid var(--border);
-    color: var(--text-muted);
+    border: 1.5px solid var(--border-hover);
+    color: var(--text-primary);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
-    transition: border-color 0.2s, color 0.2s;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
 }
 
 .sample-reset-btn:hover {
     border-color: var(--accent);
     color: var(--accent);
+    background: rgba(255, 255, 255, 0.04);
 }
 
 .sample-reset-btn svg {
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
     stroke: currentColor;
     fill: none;
     stroke-width: 2.5;
@@ -2064,26 +2085,27 @@ body {
 }
 
 .help-toggle {
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
     background: var(--surface-raised);
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    font-size: 0.6rem;
+    border: 1.5px solid var(--border-hover);
+    color: var(--text-primary);
+    font-size: 0.72rem;
     font-weight: 600;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: border-color 0.2s, color 0.2s;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
     position: relative;
     font-family: 'IBM Plex Sans', sans-serif;
 }
 
 .help-toggle:hover {
     border-color: var(--accent);
-    color: var(--text-primary);
+    color: var(--accent);
+    background: rgba(255, 255, 255, 0.04);
 }
 
 .help-tooltip-content {
@@ -2253,7 +2275,6 @@ body {
 
 .drop-overlay.visible {
     opacity: 1;
-    pointer-events: auto;
 }
 
 .drop-overlay-content {

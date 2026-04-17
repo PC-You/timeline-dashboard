@@ -2,7 +2,7 @@
 
 **Author:** Jordan Roberts  
 **Last Updated:** 2026-04-11  
-**Current Version:** v0.4.3
+**Current Version:** v0.4.4
 
 ---
 
@@ -86,21 +86,21 @@ resolution. Collaboration is planned as a backend feature.
   auto-focus threshold, W+click always additive.
 - ~~Metric tabs~~ (v0.4.2) — Configurable presets (count, count distinct, sum, avg, min, max), numeric column detection,
   metric-aware stats and badges, auto-thresholds per metric.
+- ~~Signed metrics, column sort, sample data~~ (v0.4.3) — Volume/net distinction, negative palette ramps, click-to-sort
+  column headers, Financial + IT Ticketing datasets, three-card chooser.
+- ~~Bug fixes and polish~~ (v0.4.4) — Drag & drop reliability, button visibility, empty state copy, smooth
+  sidebar/heatmap scrolling, GitHub Issues fallback, auto-detect date column setting.
 
-*v0.4.3 — Signed metrics, column sort, sample data expansion:*
+*v0.4.5 — Date column picker + settings UX polish:*
 
-- **Signed metric support** — Columns with negative values (e.g. financial transactions) get two metric modes:
-    - *Volume* — Absolute sum of all values. Answers "how active was this day?"
-    - *Net* — Diverging color scale: positive intensifies in one hue direction, negative in the other, zero is neutral.
-      Each palette gains a negative ramp (nhm1–nhm4). Answers "did I gain or lose?"
-- **Column sort in day log** — Click column header to sort. Default sort by time. Toggle ascending/descending. Visual
-  indicator on active sort column.
-- **Financial sample data** — Transaction records with signed amounts (income/expenses), categories, descriptions,
-  accounts. Exercises the diverging scale.
-- **Ticketing sample data** — Support tickets with ticket IDs, assignees, priorities, statuses, categories, response
-  times. Exercises count distinct and avg metrics.
-- **Sample data chooser** — Three-card selection screen on empty state (Database, Financial, Ticketing) with icons,
-  descriptions, and field lists. Replaces the single "Generate Sample Data" button.
+- **Date column picker** — On CSV load, if auto-detect is off OR no timestamp-like header is found, show a modal listing
+  all columns with detected date format (ISO, Oracle DD-MON-YY, US/EU, Unix epoch) and sample value for each. User picks
+  one to proceed.
+- **Conditional month color picker** — Hide the month indicator color swatch unless the month boundary toggle is on.
+  Consider replacing the raw color input with a themed dropper icon button that opens a swatch picker.
+- **Sample reset clears session-only settings** — When clicking the back button from sample data, reset all settings
+  *except* theme (hidden days, month indicators, auto-focus, etc. return to defaults). Keeps palette choice sticky since
+  it's a global preference.
 
 *Future v0.4.x:*
 

@@ -175,7 +175,7 @@ function closeToolbarMenu() {
 
 function exportState() {
     const payload = {
-        version: '0.4.3',
+        version: '0.4.4',
         notes: state.notes,
         filters: {},
         filterModes: state.filterModes,
@@ -190,6 +190,7 @@ function exportState() {
             monthPadding: settings.monthPadding,
             monthIndicatorColor: settings.monthIndicatorColor,
             autoFocusThreshold: settings.autoFocusThreshold,
+            autoDetectDateColumn: settings.autoDetectDateColumn,
         },
     };
     // Convert filter Sets to arrays for JSON
@@ -248,6 +249,7 @@ function importState(payload) {
             applyMonthIndicatorColor(settings.monthIndicatorColor);
         }
         if (payload.settings.autoFocusThreshold != null) settings.autoFocusThreshold = payload.settings.autoFocusThreshold;
+        if (payload.settings.autoDetectDateColumn != null) settings.autoDetectDateColumn = payload.settings.autoDetectDateColumn;
         // Sync UI controls
         document.querySelectorAll('#settingsDowGrid input[type="checkbox"]').forEach(cb => {
             cb.checked = !settings.hiddenDays.has(parseInt(cb.dataset.dow));
@@ -258,6 +260,8 @@ function importState(payload) {
         if (mcIn) mcIn.value = settings.monthIndicatorColor;
         const afIn = document.getElementById('settingsAutoFocus');
         if (afIn) afIn.value = settings.autoFocusThreshold;
+        const adCb = document.getElementById('settingsAutoDetectDate');
+        if (adCb) adCb.checked = settings.autoDetectDateColumn;
     }
     // Re-run pipeline and render
     if (state.schema) applyFilters();
@@ -266,8 +270,8 @@ function importState(payload) {
 
 // ===== Drag and drop =====
 function initDragDrop() {
-    const appEl = document.querySelector('.app');
-    let dragCounter = 0;
+    let lastOverTime = 0;
+    let checkTimer = null;
 
     const showOverlay = () => {
         let overlay = document.getElementById('dropOverlay');
@@ -287,28 +291,43 @@ function initDragDrop() {
     const hideOverlay = () => {
         const overlay = document.getElementById('dropOverlay');
         if (overlay) overlay.classList.remove('visible');
+        if (checkTimer) {
+            clearInterval(checkTimer);
+            checkTimer = null;
+        }
     };
 
-    appEl.addEventListener('dragenter', (e) => {
+    const hasFiles = (e) => {
+        if (!e.dataTransfer) return false;
+        const types = e.dataTransfer.types;
+        if (!types) return false;
+        for (let i = 0; i < types.length; i++) {
+            if (types[i] === 'Files') return true;
+        }
+        return false;
+    };
+
+    window.addEventListener('dragenter', (e) => {
+        if (!hasFiles(e)) return;
         e.preventDefault();
-        dragCounter++;
-        if (dragCounter === 1) showOverlay();
-    });
-    appEl.addEventListener('dragleave', (e) => {
-        e.preventDefault();
-        dragCounter--;
-        if (dragCounter <= 0) {
-            dragCounter = 0;
-            hideOverlay();
+        lastOverTime = Date.now();
+        showOverlay();
+        if (!checkTimer) {
+            // Heartbeat: if dragover stops firing for >150ms, drag has left window
+            checkTimer = setInterval(() => {
+                if (Date.now() - lastOverTime > 150) hideOverlay();
+            }, 100);
         }
     });
-    appEl.addEventListener('dragover', (e) => {
+    window.addEventListener('dragover', (e) => {
+        if (!hasFiles(e)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
+        lastOverTime = Date.now();
     });
-    appEl.addEventListener('drop', (e) => {
+    window.addEventListener('drop', (e) => {
+        if (!hasFiles(e)) return;
         e.preventDefault();
-        dragCounter = 0;
         hideOverlay();
         const file = e.dataTransfer.files[0];
         if (!file) return;
@@ -320,6 +339,8 @@ function initDragDrop() {
         reader.onload = (ev) => loadCSVData(ev.target.result, file.name);
         reader.readAsText(file);
     });
+    // Also hide on Escape key during drag (some browsers fire this)
+    window.addEventListener('dragend', hideOverlay);
 }
 
 // ===== Keyboard shortcuts =====
@@ -458,7 +479,7 @@ function initHelpModal() {
         reportBtn.addEventListener('click', () => {
             // Build diagnostic state
             const bugState = {
-                version: '0.4.3',
+                version: '0.4.4',
                 userAgent: navigator.userAgent,
                 recordCount: state.raw.length,
                 schemaTimestampKey: state.schema?.timestampKey || null,
@@ -555,6 +576,13 @@ function initSettingsModal() {
     afInput.addEventListener('change', () => {
         settings.autoFocusThreshold = Math.max(0, parseInt(afInput.value) || 0);
         afInput.value = settings.autoFocusThreshold;
+    });
+
+    // Auto-detect date column
+    const autoDateCb = document.getElementById('settingsAutoDetectDate');
+    autoDateCb.checked = settings.autoDetectDateColumn;
+    autoDateCb.addEventListener('change', () => {
+        settings.autoDetectDateColumn = autoDateCb.checked;
     });
 
     btn.addEventListener('click', () => overlay.style.display = '');
@@ -830,8 +858,36 @@ function initSidebarEvents() {
             ticking = true;
         }
     });
+
+    // Smooth wheel scrolling
+    let targetScroll = sidebar.scrollTop;
+    let animating = false;
+    const animateScroll = () => {
+        const current = sidebar.scrollTop;
+        const diff = targetScroll - current;
+        if (Math.abs(diff) < 0.5) {
+            sidebar.scrollTop = targetScroll;
+            animating = false;
+            return;
+        }
+        sidebar.scrollTop = current + diff * 0.2; // easing factor
+        requestAnimationFrame(animateScroll);
+    };
+
     sidebar.addEventListener('wheel', (e) => {
-        if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) e.preventDefault();
+        if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+            e.preventDefault();
+            return;
+        }
+        // Smooth vertical wheel
+        e.preventDefault();
+        // Sync target with current if we weren't mid-animation
+        if (!animating) targetScroll = sidebar.scrollTop;
+        targetScroll = Math.max(0, Math.min(sidebar.scrollHeight - sidebar.clientHeight, targetScroll + e.deltaY));
+        if (!animating) {
+            animating = true;
+            requestAnimationFrame(animateScroll);
+        }
     }, {passive: false});
 
     const sidebarWrapper = document.getElementById('sidebarWrapper');
@@ -846,12 +902,27 @@ function initSidebarEvents() {
 // ===== Heatmap wheel scroll =====
 function initHeatmapScroll() {
     const sidebar = document.getElementById('sidebar');
+    let targetScroll = sidebar.scrollTop;
+    let animating = false;
+    const animateScroll = () => {
+        const current = sidebar.scrollTop;
+        const diff = targetScroll - current;
+        if (Math.abs(diff) < 0.5) {
+            sidebar.scrollTop = targetScroll;
+            animating = false;
+            return;
+        }
+        sidebar.scrollTop = current + diff * 0.2;
+        requestAnimationFrame(animateScroll);
+    };
     document.querySelector('.heatmap-container').addEventListener('wheel', (e) => {
         e.preventDefault();
-        if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-            sidebar.scrollBy({top: e.deltaX * HORIZ_SCROLL_FACTOR, behavior: 'auto'});
-        } else {
-            sidebar.scrollBy({top: e.deltaY, behavior: 'auto'});
+        const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX * HORIZ_SCROLL_FACTOR : e.deltaY;
+        if (!animating) targetScroll = sidebar.scrollTop;
+        targetScroll = Math.max(0, Math.min(sidebar.scrollHeight - sidebar.clientHeight, targetScroll + delta));
+        if (!animating) {
+            animating = true;
+            requestAnimationFrame(animateScroll);
         }
     }, {passive: false});
 }
