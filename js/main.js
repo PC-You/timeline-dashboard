@@ -1,29 +1,25 @@
 /*
- * main.js — Entry point: boot, wiring, drag-drop, keyboard shortcuts
+ * main.js — Entry point: boot, CSV loading, drag-drop, metric tabs,
+ * heatmap/sidebar scroll. Keyboard, state I/O, and modals live in their own modules.
  */
 
-import {
-    state,
-    app,
-    keysHeld,
-    HORIZ_SCROLL_FACTOR,
-    clearAllSelections,
-    hasAnySelections,
-    undoSelection,
-    redoSelection,
-    dateKey,
-    settings
-} from './state.js';
+import {HORIZ_SCROLL_FACTOR} from './constants.js';
+import {state, app, clearAllSelections, settings} from './state.js';
 import {parseCSV} from './csv.js';
 import {detectSchema, parseTimestamp} from './schema.js';
 import {ingest, buildGeometry, applyFilters, switchMetric} from './data.js';
 import {renderFilterBar, initFilterListeners} from './filters.js';
-import {renderHeatmap, updateHeatmapLevels, updateDataSourceIndicator, selectDate} from './heatmap.js';
+import {renderHeatmap, updateHeatmapLevels, updateDataSourceIndicator} from './heatmap.js';
 import {refreshNoteIndicators, initNoteListeners} from './notes.js';
-import {refreshAllHighlights, selectAll, promoteSelectionToMulti, demoteSelectionFromMulti} from './highlights.js';
+import {refreshAllHighlights} from './highlights.js';
 import {renderContent} from './content.js';
 import {renderSidebar, syncHeatmap} from './sidebar.js';
-import {applyPalette, palettes} from './themes.js';
+import {applyPalette} from './themes.js';
+import {initStateIO} from './state-io.js';
+import {initKeyboardShortcuts} from './keyboard.js';
+import {initHelpModal} from './help-modal.js';
+import {initSettingsModal, applyMonthIndicatorColor} from './settings-modal.js';
+import {maybeShowDatePicker} from './date-picker-modal.js';
 
 // Register cross-module functions
 app.renderContent = renderContent;
@@ -31,6 +27,7 @@ app.fullRender = fullRender;
 app.updateHeatmapLevels = updateHeatmapLevels;
 app.refreshNoteIndicators = refreshNoteIndicators;
 app.refreshAllHighlights = refreshAllHighlights;
+app.applyMonthIndicatorColor = applyMonthIndicatorColor;
 
 function fullRender() {
     buildGeometry();
@@ -50,13 +47,18 @@ function fullRender() {
     }, 60);
 }
 
-function loadCSVData(text, fileName) {
+async function loadCSVData(text, fileName) {
     const result = parseCSV(text);
     if (!result) {
         showLoadError('Could not parse file. Check that the delimiter is comma, tab, pipe, or semicolon, and that a "sep=" header is present for non-standard delimiters.');
         return;
     }
-    const schema = detectSchema(result.headers, result.records);
+
+    // Ask the user to pick the date column (or auto-detect if settings allow)
+    const picked = await maybeShowDatePicker(result.records, result.headers);
+    if (!picked) return; // user cancelled
+
+    const schema = detectSchema(result.headers, result.records, picked);
 
     // Validate timestamp column has parseable dates
     const tsKey = schema.timestampKey;
@@ -103,7 +105,7 @@ function boot() {
     initKeyboardShortcuts();
     initHelpModal();
     initSettingsModal();
-    // Sample data reset button
+    // Sample data reset button — clears data and all session settings except theme
     document.getElementById('sampleResetBtn')?.addEventListener('click', () => {
         state.raw = [];
         state.filtered = [];
@@ -119,6 +121,25 @@ function boot() {
         state.sortDirection = 'asc';
         clearAllSelections();
         state.focusedDays.clear();
+        // Reset session-only settings (palette stays — it's a global preference)
+        settings.hiddenDays.clear();
+        settings.monthPadding = false;
+        settings.monthIndicatorColor = '#ffffff';
+        settings.autoFocusThreshold = 7;
+        settings.autoDetectDateColumn = true;
+        // Sync settings UI controls
+        document.querySelectorAll('#settingsDowGrid input[type="checkbox"]').forEach(cb => cb.checked = true);
+        const mpCb = document.getElementById('settingsMonthPadding');
+        if (mpCb) mpCb.checked = false;
+        const mcIn = document.getElementById('settingsMonthColor');
+        if (mcIn) mcIn.value = '#ffffff';
+        const mcRow = document.getElementById('settingsMonthColorRow');
+        if (mcRow) mcRow.style.display = 'none';
+        const afIn = document.getElementById('settingsAutoFocus');
+        if (afIn) afIn.value = 7;
+        const adCb = document.getElementById('settingsAutoDetectDate');
+        if (adCb) adCb.checked = true;
+        if (app.applyMonthIndicatorColor) app.applyMonthIndicatorColor('#ffffff');
         fullRender();
     });
     fullRender();
@@ -135,138 +156,6 @@ function initCSVLoader() {
     });
 }
 
-// ===== State export/import =====
-function initStateIO() {
-    document.getElementById('exportStateBtn').addEventListener('click', () => {
-        exportState();
-        closeToolbarMenu();
-    });
-    document.getElementById('loadStateInput').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-            try {
-                importState(JSON.parse(ev.target.result));
-            } catch (err) {
-                console.error('Failed to load state:', err);
-            }
-        };
-        reader.readAsText(file);
-        e.target.value = '';
-        closeToolbarMenu();
-    });
-    document.getElementById('csvInput').addEventListener('change', () => closeToolbarMenu());
-
-    // Toolbar menu toggle
-    const menuBtn = document.getElementById('toolbarMenuBtn');
-    const dropdown = document.getElementById('toolbarDropdown');
-    menuBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        dropdown.classList.toggle('open');
-    });
-    document.addEventListener('click', () => dropdown.classList.remove('open'));
-    dropdown.addEventListener('click', (e) => e.stopPropagation());
-}
-
-function closeToolbarMenu() {
-    document.getElementById('toolbarDropdown')?.classList.remove('open');
-}
-
-function exportState() {
-    const payload = {
-        version: '0.4.4',
-        notes: state.notes,
-        filters: {},
-        filterModes: state.filterModes,
-        filterHighlightColors: state.filterHighlightColors,
-        visibleFilterColumns: state.schema?.visibleFilterColumns || [],
-        activePalette: state.activePalette,
-        focusedDays: Array.from(state.focusedDays),
-        metricPresets: state.metricPresets,
-        activeMetricIndex: state.activeMetricIndex,
-        settings: {
-            hiddenDays: Array.from(settings.hiddenDays),
-            monthPadding: settings.monthPadding,
-            monthIndicatorColor: settings.monthIndicatorColor,
-            autoFocusThreshold: settings.autoFocusThreshold,
-            autoDetectDateColumn: settings.autoDetectDateColumn,
-        },
-    };
-    // Convert filter Sets to arrays for JSON
-    if (state.schema) {
-        state.schema.filterColumns.forEach(col => {
-            if (state.filters[col]?.size > 0) {
-                payload.filters[col] = Array.from(state.filters[col]);
-            }
-        });
-    }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {type: 'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const dsName = state.dataSource?.name?.replace(/\.[^.]+$/, '') || 'dashboard';
-    a.download = `${dsName}-state.json`;
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
-
-function importState(payload) {
-    if (!payload) return;
-    // Restore notes
-    if (payload.notes) state.notes = payload.notes;
-    // Restore filters (arrays back to Sets)
-    if (payload.filters && state.schema) {
-        state.schema.filterColumns.forEach(col => {
-            if (payload.filters[col]) state.filters[col] = new Set(payload.filters[col]);
-        });
-    }
-    // Restore filter modes and colors
-    if (payload.filterModes) Object.assign(state.filterModes, payload.filterModes);
-    if (payload.filterHighlightColors) Object.assign(state.filterHighlightColors, payload.filterHighlightColors);
-    // Restore visible filter columns
-    if (payload.visibleFilterColumns && state.schema) {
-        state.schema.visibleFilterColumns = payload.visibleFilterColumns;
-    }
-    // Restore palette
-    if (payload.activePalette != null) applyPalette(payload.activePalette);
-    // Restore focused days
-    if (payload.focusedDays) state.focusedDays = new Set(payload.focusedDays);
-    // Restore metric presets
-    if (payload.metricPresets) {
-        state.metricPresets = payload.metricPresets;
-        state.activeMetricIndex = payload.activeMetricIndex ?? 0;
-    }
-    // Restore display settings
-    if (payload.settings) {
-        if (payload.settings.hiddenDays) settings.hiddenDays = new Set(payload.settings.hiddenDays);
-        if (payload.settings.monthPadding != null) settings.monthPadding = payload.settings.monthPadding;
-        if (payload.settings.monthIndicatorColor) {
-            settings.monthIndicatorColor = payload.settings.monthIndicatorColor;
-            applyMonthIndicatorColor(settings.monthIndicatorColor);
-        }
-        if (payload.settings.autoFocusThreshold != null) settings.autoFocusThreshold = payload.settings.autoFocusThreshold;
-        if (payload.settings.autoDetectDateColumn != null) settings.autoDetectDateColumn = payload.settings.autoDetectDateColumn;
-        // Sync UI controls
-        document.querySelectorAll('#settingsDowGrid input[type="checkbox"]').forEach(cb => {
-            cb.checked = !settings.hiddenDays.has(parseInt(cb.dataset.dow));
-        });
-        const mpCb = document.getElementById('settingsMonthPadding');
-        if (mpCb) mpCb.checked = settings.monthPadding;
-        const mcIn = document.getElementById('settingsMonthColor');
-        if (mcIn) mcIn.value = settings.monthIndicatorColor;
-        const afIn = document.getElementById('settingsAutoFocus');
-        if (afIn) afIn.value = settings.autoFocusThreshold;
-        const adCb = document.getElementById('settingsAutoDetectDate');
-        if (adCb) adCb.checked = settings.autoDetectDateColumn;
-    }
-    // Re-run pipeline and render
-    if (state.schema) applyFilters();
-    fullRender();
-}
 
 // ===== Drag and drop =====
 function initDragDrop() {
@@ -343,269 +232,7 @@ function initDragDrop() {
     window.addEventListener('dragend', hideOverlay);
 }
 
-// ===== Keyboard shortcuts =====
-function initKeyboardShortcuts() {
-    let promotedDate = null;
 
-    document.addEventListener('keydown', (e) => {
-        keysHeld.add(e.key.toLowerCase());
-        const tag = document.activeElement?.tagName;
-        const inInput = tag === 'INPUT' || tag === 'TEXTAREA';
-
-        // Esc: clear all selections
-        if (e.key === 'Escape' && !inInput) {
-            if (hasAnySelections() || state.selectedDate) {
-                clearAllSelections();
-                state.selectedDate = null;
-                document.querySelectorAll('.heatmap-cell.selected').forEach(c => c.classList.remove('selected'));
-                refreshAllHighlights();
-                app.renderContent();
-            }
-        }
-
-        // Ctrl+A: select all
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && !inInput) {
-            e.preventDefault();
-            if (state.raw.length > 0) selectAll();
-        }
-
-        // Ctrl+Z: undo selection
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey && !inInput) {
-            e.preventDefault();
-            if (undoSelection()) {
-                refreshAllHighlights();
-                app.renderContent();
-            }
-        }
-
-        // Ctrl+Y / Ctrl+Shift+Z: redo selection
-        if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.key.toLowerCase() === 'z' && e.shiftKey)) && !inInput) {
-            e.preventDefault();
-            if (redoSelection()) {
-                refreshAllHighlights();
-                app.renderContent();
-            }
-        }
-
-        // Arrow keys: navigate single-select
-        if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key) && !inInput && state.selectedDate && !hasAnySelections()) {
-            e.preventDefault();
-            const current = new Date(state.selectedDate + 'T00:00:00');
-            let offset = 0;
-            if (e.key === 'ArrowUp') offset = -1;
-            else if (e.key === 'ArrowDown') offset = 1;
-            else if (e.key === 'ArrowLeft') offset = -7;
-            else if (e.key === 'ArrowRight') offset = 7;
-            current.setDate(current.getDate() + offset);
-            const newDk = dateKey(current);
-            const targetCell = document.querySelector(`.heatmap-cell[data-date="${newDk}"]`);
-            if (targetCell) {
-                selectDate(newDk);
-                // Scroll heatmap to keep cell visible
-                const inner = document.getElementById('heatmapInner');
-                const sidebar = document.getElementById('sidebar');
-                if (inner && sidebar) {
-                    const cellRect = targetCell.getBoundingClientRect();
-                    const innerRect = inner.getBoundingClientRect();
-                    const margin = 40; // px buffer from edge
-                    if (cellRect.right > innerRect.right - margin) {
-                        sidebar.scrollBy({top: 20, behavior: 'smooth'});
-                    } else if (cellRect.left < innerRect.left + margin) {
-                        sidebar.scrollBy({top: -20, behavior: 'smooth'});
-                    }
-                }
-            }
-        }
-
-        // Ctrl pressed while a single day is selected and NO multi-select active: promote
-        if ((e.key === 'Control' || e.key === 'Meta') && state.selectedDate && !hasAnySelections()) {
-            promotedDate = state.selectedDate;
-            promoteSelectionToMulti();
-        }
-    });
-
-    document.addEventListener('keyup', (e) => {
-        keysHeld.delete(e.key.toLowerCase());
-        if ((e.key === 'Control' || e.key === 'Meta') && promotedDate) {
-            demoteSelectionFromMulti(promotedDate);
-            promotedDate = null;
-        }
-    });
-
-    window.addEventListener('blur', () => {
-        keysHeld.clear();
-        if (promotedDate) {
-            demoteSelectionFromMulti(promotedDate);
-            promotedDate = null;
-        }
-    });
-}
-
-// ===== Help modal =====
-function initHelpModal() {
-    const btn = document.getElementById('helpModalBtn');
-    const overlay = document.getElementById('helpModalOverlay');
-    const close = document.getElementById('helpModalClose');
-    if (!btn || !overlay) return;
-
-    const tabs = overlay.querySelectorAll('.help-tab');
-    const panels = {
-        guide: document.getElementById('helpPanelGuide'),
-        roadmap: document.getElementById('helpPanelRoadmap'),
-        changelog: document.getElementById('helpPanelChangelog'),
-    };
-
-    function showTab(tabName) {
-        tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
-        for (const [name, panel] of Object.entries(panels)) {
-            panel.style.display = name === tabName ? '' : 'none';
-        }
-        overlay.querySelector('.help-modal-body').scrollTop = 0;
-    }
-
-    tabs.forEach(tab => tab.addEventListener('click', () => showTab(tab.dataset.tab)));
-    btn.addEventListener('click', () => {
-        showTab('guide');
-        overlay.style.display = '';
-    });
-    close.addEventListener('click', () => overlay.style.display = 'none');
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) overlay.style.display = 'none';
-    });
-
-    // Report a Bug: download state + open mailto
-    const reportBtn = document.getElementById('reportBugBtn');
-    if (reportBtn) {
-        reportBtn.addEventListener('click', () => {
-            // Build diagnostic state
-            const bugState = {
-                version: '0.4.4',
-                userAgent: navigator.userAgent,
-                recordCount: state.raw.length,
-                schemaTimestampKey: state.schema?.timestampKey || null,
-                activeFilters: {},
-                notes: state.notes,
-                filters: {},
-                filterModes: state.filterModes,
-                filterHighlightColors: state.filterHighlightColors,
-                activePalette: state.activePalette,
-            };
-            if (state.schema) {
-                state.schema.filterColumns.forEach(col => {
-                    if (state.filters[col]?.size > 0) bugState.filters[col] = Array.from(state.filters[col]);
-                });
-            }
-            // Download state file
-            const blob = new Blob([JSON.stringify(bugState, null, 2)], {type: 'application/json'});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'timeline-dashboard-bug-report.json';
-            a.style.display = 'none';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            // Open mailto
-            setTimeout(() => {
-                window.location.href = 'mailto:jordan.roberts4251@gmail.com?subject=Timeline%20Dashboard%20Bug%20Report&body=Please%20describe%20the%20issue%20and%20attach%20the%20downloaded%20state%20file.';
-            }, 500);
-        });
-    }
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && overlay.style.display !== 'none') {
-            e.stopImmediatePropagation();
-            overlay.style.display = 'none';
-        }
-    }, true);
-}
-
-// ===== Settings modal =====
-function initSettingsModal() {
-    const btn = document.getElementById('settingsBtn');
-    const overlay = document.getElementById('settingsModalOverlay');
-    const close = document.getElementById('settingsModalClose');
-    const grid = document.getElementById('settingsPaletteGrid');
-    if (!btn || !overlay || !grid) return;
-
-    // Build palette swatches
-    palettes.forEach((p, i) => {
-        const swatch = document.createElement('button');
-        swatch.className = 'settings-swatch' + (i === (state.activePalette ?? 4) ? ' active' : '');
-        swatch.innerHTML = `<div class="settings-swatch-color" style="background:${p.accent}"></div><span class="settings-swatch-label">${p.name}</span>`;
-        swatch.addEventListener('click', () => {
-            applyPalette(i);
-            grid.querySelectorAll('.settings-swatch').forEach(s => s.classList.remove('active'));
-            swatch.classList.add('active');
-        });
-        grid.appendChild(swatch);
-    });
-
-    // Day-of-week toggles
-    document.querySelectorAll('#settingsDowGrid input[type="checkbox"]').forEach(cb => {
-        const dow = parseInt(cb.dataset.dow);
-        cb.checked = !settings.hiddenDays.has(dow);
-        cb.addEventListener('change', () => {
-            if (cb.checked) settings.hiddenDays.delete(dow);
-            else settings.hiddenDays.add(dow);
-            if (state.raw.length > 0) fullRender();
-        });
-    });
-
-    // Month padding toggle
-    const monthPadCb = document.getElementById('settingsMonthPadding');
-    monthPadCb.checked = settings.monthPadding;
-    monthPadCb.addEventListener('change', () => {
-        settings.monthPadding = monthPadCb.checked;
-        if (state.raw.length > 0) fullRender();
-    });
-
-    // Month indicator color
-    const monthColorInput = document.getElementById('settingsMonthColor');
-    monthColorInput.value = settings.monthIndicatorColor;
-    applyMonthIndicatorColor(settings.monthIndicatorColor);
-    monthColorInput.addEventListener('input', () => {
-        settings.monthIndicatorColor = monthColorInput.value;
-        applyMonthIndicatorColor(monthColorInput.value);
-    });
-
-    // Auto-focus threshold
-    const afInput = document.getElementById('settingsAutoFocus');
-    afInput.value = settings.autoFocusThreshold;
-    afInput.addEventListener('change', () => {
-        settings.autoFocusThreshold = Math.max(0, parseInt(afInput.value) || 0);
-        afInput.value = settings.autoFocusThreshold;
-    });
-
-    // Auto-detect date column
-    const autoDateCb = document.getElementById('settingsAutoDetectDate');
-    autoDateCb.checked = settings.autoDetectDateColumn;
-    autoDateCb.addEventListener('change', () => {
-        settings.autoDetectDateColumn = autoDateCb.checked;
-    });
-
-    btn.addEventListener('click', () => overlay.style.display = '');
-    close.addEventListener('click', () => overlay.style.display = 'none');
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) overlay.style.display = 'none';
-    });
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && overlay.style.display !== 'none') {
-            e.stopImmediatePropagation();
-            overlay.style.display = 'none';
-        }
-    }, true);
-}
-
-function applyMonthIndicatorColor(hex) {
-    const root = document.documentElement;
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    root.style.setProperty('--month-indicator', `rgba(${r},${g},${b},0.35)`);
-    root.style.setProperty('--month-indicator-glow', `rgba(${r},${g},${b},0.12)`);
-}
 
 // ===== Metric tabs =====
 function renderMetricTabs() {

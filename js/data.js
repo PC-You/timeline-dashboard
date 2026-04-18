@@ -2,7 +2,9 @@
  * data.js — Data pipeline: ingest, indexing, filtering, aggregation, geometry
  */
 
-import {state, MONTHS, WEEK_PX, dateKeyFromStr, autoThresholds} from './state.js';
+import {MONTHS, WEEK_PX} from './constants.js';
+import {dateKeyFromStr, autoThresholds} from './utils.js';
+import {state} from './state.js';
 import {parseTimestamp, toNormalizedISO} from './schema.js';
 
 export function ingest(records, schema) {

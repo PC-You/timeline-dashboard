@@ -2,7 +2,9 @@
  * filters.js — Schema-driven faceted filters with slide toggle and color picker
  */
 
-import {state, app, escapeHtml, hasAnyExcludeFilters, hasAnyHighlightFilters, HIGHLIGHT_PRESETS} from './state.js';
+import {HIGHLIGHT_PRESETS} from './constants.js';
+import {escapeHtml} from './utils.js';
+import {state, app, hasAnyExcludeFilters, hasAnyHighlightFilters} from './state.js';
 import {applyFilters} from './data.js';
 
 const FACET_PAGE_SIZE = 100;

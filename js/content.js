@@ -2,17 +2,9 @@
  * content.js — Main content area rendering (stats, log table, summary)
  */
 
-import {
-    state,
-    app,
-    dateKey,
-    escapeHtml,
-    MAX_LOG_ROWS,
-    clearAllSelections,
-    hasAnySelections,
-    hasAnyHighlightFilters,
-    settings
-} from './state.js';
+import {MAX_LOG_ROWS} from './constants.js';
+import {dateKey, escapeHtml} from './utils.js';
+import {state, app, clearAllSelections, hasAnySelections, hasAnyHighlightFilters, settings} from './state.js';
 import {hasDayNote, getRowNote, openNoteModal} from './notes.js';
 import {getHighlightSummary, getSelectedDays, refreshAllHighlights} from './highlights.js';
 import {generateSampleData, generateFinancialData, generateTicketingData} from './csv.js';

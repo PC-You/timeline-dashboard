@@ -1246,6 +1246,30 @@ body {
     cursor: pointer;
 }
 
+.settings-subrow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 6px;
+    margin-left: 24px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.settings-subrow-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-muted);
+}
+
+.settings-dropper-icon {
+    stroke: var(--text-muted);
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
 .settings-color-input {
     width: 24px;
     height: 24px;
@@ -2684,3 +2708,155 @@ body {
     color: var(--accent);
 }
 
+
+/* ===== Date column picker modal ===== */
+
+.date-picker-modal {
+    max-width: 640px;
+}
+
+.date-picker-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.date-picker-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    background: var(--surface);
+}
+
+.date-picker-row:hover {
+    border-color: var(--border-hover);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.date-picker-row.selected {
+    border-color: var(--accent);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.date-picker-row input[type="radio"] {
+    margin-top: 3px;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.date-picker-row-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.date-picker-row-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.date-picker-col-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.88rem;
+}
+
+.date-picker-badge {
+    font-size: 0.65rem;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.date-picker-confidence {
+    margin-left: auto;
+    font-size: 0.72rem;
+    font-family: 'IBM Plex Mono', monospace;
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.date-picker-confidence.high {
+    color: #4ade80;
+    background: rgba(74, 222, 128, 0.1);
+}
+
+.date-picker-confidence.med {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.1);
+}
+
+.date-picker-confidence.low {
+    color: #f87171;
+    background: rgba(248, 113, 113, 0.1);
+}
+
+.date-picker-row-detail {
+    display: flex;
+    gap: 10px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.date-picker-format {
+    color: var(--accent);
+    font-family: 'IBM Plex Mono', monospace;
+    white-space: nowrap;
+}
+
+.date-picker-samples {
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--text-muted);
+    opacity: 0.7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.date-picker-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 14px 24px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.date-picker-warning {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    border: 1px solid rgba(251, 191, 36, 0.35);
+    border-radius: 8px;
+    background: rgba(251, 191, 36, 0.06);
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+.date-picker-warning strong {
+    color: #fbbf24;
+    display: block;
+    margin-bottom: 2px;
+}
+
+.date-picker-warning-icon {
+    color: #fbbf24;
+    font-size: 1.1rem;
+    line-height: 1;
+    margin-top: 1px;
+    flex-shrink: 0;
+}

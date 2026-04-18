@@ -2,7 +2,8 @@
  * sidebar.js — Year sidebar navigation and heatmap sync
  */
 
-import {state, WEEK_PX, app} from './state.js';
+import {WEEK_PX} from './constants.js';
+import {state, app} from './state.js';
 
 export function renderSidebar() {
     const container = document.getElementById('yearSlots');

@@ -2,17 +2,16 @@
  * heatmap.js — Heatmap rendering, tooltips, cell interactions, data source indicator
  */
 
+import {MAX_LOG_ROWS} from './constants.js';
+import {dateKey, getLevel, monthKeyFromDate} from './utils.js';
 import {
     state,
     config,
     app,
     keysHeld,
-    dateKey,
-    getLevel,
-    MAX_LOG_ROWS,
-    monthKeyFromDate,
     clearAllSelections,
-    settings
+    settings,
+    pushSelectionSnapshot
 } from './state.js';
 import {getEffectiveThresholds} from './data.js';
 import {hasDayNote, refreshNoteIndicators} from './notes.js';
@@ -26,7 +25,6 @@ import {
     selectYear,
     selectWeek
 } from './highlights.js';
-import {pushSelectionSnapshot} from './state.js';
 
 // ===== Tooltip =====
 

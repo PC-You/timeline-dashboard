@@ -2,19 +2,9 @@
  * highlights.js — Selection highlighting: row, column, day, month, week, filter
  */
 
-import {
-    state,
-    app,
-    MONTHS,
-    DOW_NAMES,
-    MAX_LOG_ROWS,
-    dateKey,
-    monthKeyFromDate,
-    hasAnySelections,
-    clearAllSelections,
-    hasAnyHighlightFilters,
-    pushSelectionSnapshot
-} from './state.js';
+import {MONTHS, DOW_NAMES, MAX_LOG_ROWS} from './constants.js';
+import {dateKey, monthKeyFromDate} from './utils.js';
+import {state, app, hasAnySelections, clearAllSelections, hasAnyHighlightFilters, pushSelectionSnapshot} from './state.js';
 
 export function clearDaySelection() {
     state.selectedDate = null;

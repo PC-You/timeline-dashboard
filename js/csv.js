@@ -2,7 +2,7 @@
  * csv.js — Pure CSV/TSV parser and sample data generator
  */
 
-import {dateKey} from './state.js';
+import {dateKey} from './utils.js';
 import {sampleDataSchema, financialDataSchema, ticketingDataSchema} from './schema.js';
 
 export function parseCSV(text) {
