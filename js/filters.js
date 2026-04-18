@@ -2,7 +2,9 @@
  * filters.js — Schema-driven faceted filters with slide toggle and color picker
  */
 
-import {state, app, escapeHtml, hasAnyExcludeFilters, hasAnyHighlightFilters, HIGHLIGHT_PRESETS} from './state.js';
+import {HIGHLIGHT_PRESETS} from './constants.js';
+import {escapeHtml} from './utils.js';
+import {state, app, hasAnyExcludeFilters, hasAnyHighlightFilters} from './state.js';
 import {applyFilters} from './data.js';
 
 const FACET_PAGE_SIZE = 100;
@@ -271,7 +273,7 @@ function refreshClearButton() {
     const old = bar.querySelector('.filter-clear, .clear-dropdown-wrapper');
     if (old) old.remove();
     // Add updated one
-    const clearEl = createClearButton(state.schema);
+    const clearEl = createClearButton();
     if (clearEl) bar.appendChild(clearEl);
     // Update record count
     const countEl = bar.querySelector('.filter-active-count');
@@ -332,7 +334,7 @@ function createColumnPicker(schema) {
     return wrapper;
 }
 
-function createClearButton(schema) {
+function createClearButton() {
     const hasExclude = hasAnyExcludeFilters();
     const hasHighlight = hasAnyHighlightFilters();
     if (!hasExclude && !hasHighlight) return null;
@@ -437,7 +439,7 @@ export function renderFilterBar(reopenCol) {
     countSpan.textContent = `${state.filtered.length.toLocaleString()} ${schema.heatmapMetric.labelPlural || 'records'}`;
     bar.appendChild(countSpan);
 
-    const clearEl = createClearButton(schema);
+    const clearEl = createClearButton();
     if (clearEl) bar.appendChild(clearEl);
 
     // Re-open a specific column's dropdown after re-render

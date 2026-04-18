@@ -2,7 +2,7 @@
  * csv.js — Pure CSV/TSV parser and sample data generator
  */
 
-import {dateKey} from './state.js';
+import {dateKey} from './utils.js';
 import {sampleDataSchema, financialDataSchema, ticketingDataSchema} from './schema.js';
 
 export function parseCSV(text) {
@@ -127,7 +127,6 @@ export function generateSampleData() {
 }
 
 export function generateFinancialData() {
-    const accounts = ['Checking', 'Savings', 'Credit Card'];
     const incomeCategories = ['Salary', 'Freelance', 'Refund', 'Interest', 'Transfer In'];
     const expenseCategories = ['Groceries', 'Dining', 'Rent', 'Utilities', 'Gas', 'Entertainment', 'Shopping', 'Insurance', 'Transfer Out', 'Subscriptions'];
     const merchants = {
@@ -229,7 +228,6 @@ export function generateTicketingData() {
         VPN: ['Cannot establish VPN connection', 'VPN extremely slow', 'Two-factor auth failing', 'Split tunnel not working', 'VPN drops after 10 min'],
         Database: ['Query timeout errors', 'Connection pool exhausted', 'Replication lag', 'Deadlock detected', 'Backup job failed'],
     };
-    const statuses = ['Open', 'In Progress', 'Waiting', 'Resolved', 'Closed'];
     const pick = arr => arr[Math.floor(Math.random() * arr.length)];
     const records = [];
     let ticketNum = 10000;

@@ -1,13 +1,9 @@
 /*
- * state.js — Shared state, constants, and utility functions
+ * state.js — Application state, user settings, and stateful selection helpers.
+ * Pure utilities are in utils.js. Constants are in constants.js.
  */
 
-export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-export const DOW_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-export const WEEK_PX = 16;
-export const MAX_LOG_ROWS = 80;
-export const AUTO_FOCUS_THRESHOLD = 7; // configurable in future settings
-export const HORIZ_SCROLL_FACTOR = 0.3;
+import { MAX_LOG_ROWS } from './constants.js';
 
 export const config = {showDayOfWeek: true};
 
@@ -17,17 +13,8 @@ export const settings = {
     monthPadding: false,        // show month boundary indicators
     monthIndicatorColor: '#ffffff', // month boundary indicator color
     autoFocusThreshold: 7,      // multi-select auto-focus limit
-    autoDetectDateColumn: true, // auto-pick timestamp column on CSV load (v0.4.5 adds picker)
+    autoDetectDateColumn: true, // auto-pick timestamp column on CSV load
 };
-
-export const HIGHLIGHT_PRESETS = [
-    {name: 'Amber', color: 'rgba(255, 180, 30, 0.75)'},
-    {name: 'Cyan', color: 'rgba(0, 220, 255, 0.70)'},
-    {name: 'Rose', color: 'rgba(255, 80, 80, 0.70)'},
-    {name: 'Violet', color: 'rgba(180, 120, 255, 0.70)'},
-    {name: 'Green', color: 'rgba(50, 230, 120, 0.70)'},
-    {name: 'Blue', color: 'rgba(70, 150, 255, 0.70)'},
-];
 
 export const state = {
     raw: [],
@@ -86,43 +73,7 @@ export const app = {};
 // Global key tracker for M/Y key detection during clicks
 export const keysHeld = new Set();
 
-// ===== Utility functions =====
-
-export function dateKey(d) {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-export function dateKeyFromStr(ts) {
-    return ts.substring(0, 10);
-}
-
-export function monthKeyFromDate(dk) {
-    return dk.substring(0, 7);
-}
-
-export function getLevel(value, thresholds) {
-    if (!thresholds) thresholds = [3, 8, 18];
-    if (value === 0) return 0;
-    const abs = Math.abs(value);
-    const sign = value < 0 ? -1 : 1;
-    if (abs <= thresholds[0]) return sign * 1;
-    if (abs <= thresholds[1]) return sign * 2;
-    if (abs <= thresholds[2]) return sign * 3;
-    return sign * 4;
-}
-
-export function autoThresholds(values) {
-    const sorted = values.filter(v => v > 0).sort((a, b) => a - b);
-    if (sorted.length === 0) return [1, 2, 3];
-    const p = (pct) => sorted[Math.min(Math.floor(pct * sorted.length), sorted.length - 1)];
-    return [p(0.25), p(0.50), p(0.75)];
-}
-
-export function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
+// ===== Selection queries =====
 
 export function hasAnySelections() {
     return state.highlightedRows.size > 0 || state.highlightedCols.size > 0 ||

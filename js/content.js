@@ -2,17 +2,9 @@
  * content.js — Main content area rendering (stats, log table, summary)
  */
 
-import {
-    state,
-    app,
-    dateKey,
-    escapeHtml,
-    MAX_LOG_ROWS,
-    clearAllSelections,
-    hasAnySelections,
-    hasAnyHighlightFilters,
-    settings
-} from './state.js';
+import {MAX_LOG_ROWS} from './constants.js';
+import {dateKey, escapeHtml} from './utils.js';
+import {state, app, clearAllSelections, hasAnySelections, hasAnyHighlightFilters, settings} from './state.js';
 import {hasDayNote, getRowNote, openNoteModal} from './notes.js';
 import {getHighlightSummary, getSelectedDays, refreshAllHighlights} from './highlights.js';
 import {generateSampleData, generateFinancialData, generateTicketingData} from './csv.js';
@@ -22,19 +14,6 @@ function metricBadge(entries) {
     const preset = state.metricPresets?.[state.activeMetricIndex];
     if (!preset || preset.type === 'count' || !entries || entries.length === 0) return '';
     const value = aggregateEntries(entries, {type: preset.type, column: preset.column});
-    return ` <span class="metric-badge">\u00b7 ${escapeHtml(preset.label)}: ${formatSummaryValue(value)}</span>`;
-}
-
-function metricBadgeFromDays(dayKeys) {
-    const preset = state.metricPresets?.[state.activeMetricIndex];
-    if (!preset || preset.type === 'count') return '';
-    const allEntries = [];
-    dayKeys.forEach(dk => {
-        const e = state.dayEntries[dk];
-        if (e) allEntries.push(...e);
-    });
-    if (allEntries.length === 0) return '';
-    const value = aggregateEntries(allEntries, {type: preset.type, column: preset.column});
     return ` <span class="metric-badge">\u00b7 ${escapeHtml(preset.label)}: ${formatSummaryValue(value)}</span>`;
 }
 
@@ -244,7 +223,7 @@ export function renderContent() {
     // Build log HTML
     let logHTML;
     if (hasAnySelections()) {
-        logHTML = buildMultiSelectView(schema, metric, metricTotalLabel);
+        logHTML = buildMultiSelectView(schema, metric);
     } else if (state.selectedDate) {
         logHTML = buildSingleDayLog(state.selectedDate, schema, metric, metricTotalLabel);
     } else {
@@ -274,7 +253,7 @@ export function renderContent() {
 
 // ===== Multi-select two-tier view =====
 
-function buildMultiSelectView(schema, metric, metricTotalLabel) {
+function buildMultiSelectView(schema, metric) {
     const allDays = getSelectedDays();
     if (allDays.length === 0) return '';
 
@@ -300,7 +279,7 @@ function buildMultiSelectView(schema, metric, metricTotalLabel) {
     // Build collapsed list
     let collapsedHTML = '';
     if (collapsed.length > 0) {
-        const rows = collapsed.map(dk => buildCollapsedRow(dk, schema, metric)).join('');
+        const rows = collapsed.map(dk => buildCollapsedRow(dk, schema)).join('');
         collapsedHTML = `
       <div class="day-log collapsed-list">
         <div class="day-log-header">
@@ -317,7 +296,6 @@ function buildFocusedDayLog(dk, schema, metric) {
     const entries = state.dayEntries[dk] || [];
     const sorted = sortEntries(entries, schema);
     const display = sorted.slice(0, MAX_LOG_ROWS);
-    const remaining = sorted.length - MAX_LOG_ROWS;
     const d = new Date(dk + 'T00:00:00');
     const formatted = d.toLocaleDateString('en-US', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'});
     const dayHasNote = hasDayNote(dk);
@@ -354,7 +332,7 @@ function buildFocusedDayLog(dk, schema, metric) {
     </div>`;
 }
 
-function buildCollapsedRow(dk, schema, metric) {
+function buildCollapsedRow(dk, schema) {
     const entries = state.dayEntries[dk] || [];
     const count = entries.length;
     const d = new Date(dk + 'T00:00:00');
@@ -697,8 +675,4 @@ function getHighlightColorForCell(record, colDef) {
 function formatSummaryValue(value) {
     if (Number.isInteger(value)) return value.toLocaleString();
     return value.toLocaleString(undefined, {maximumFractionDigits: 1});
-}
-
-function capitalize(str) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
 }

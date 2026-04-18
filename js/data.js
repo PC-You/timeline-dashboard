@@ -2,13 +2,28 @@
  * data.js — Data pipeline: ingest, indexing, filtering, aggregation, geometry
  */
 
-import {state, MONTHS, WEEK_PX, dateKeyFromStr, autoThresholds} from './state.js';
+import {MONTHS, WEEK_PX} from './constants.js';
+import {dateKeyFromStr, autoThresholds} from './utils.js';
+import {state} from './state.js';
 import {parseTimestamp, toNormalizedISO} from './schema.js';
 
 export function ingest(records, schema) {
     if (schema.timestampFormat && schema.timestampFormat !== 'iso') {
         normalizeTimestamps(records, schema);
     }
+
+    // Defensive reset: explicitly clear geometry-derived state before rebuilding.
+    // buildGeometry() below will repopulate these, but resetting here protects against
+    // a reported (unreproducible) bug where re-dragging the same file over an already-
+    // loaded dataset left scroll stuck at an arbitrary point. Belt-and-suspenders; deep
+    // diagnosis deferred to v0.5.0 when the developer logger lands.
+    state.years = [];
+    state.allYears = [];
+    state.activeYear = null;
+    state.yearWeekRanges = {};
+    state.monthPositions = [];
+    state.selectedDate = null;
+
     state.raw = records;
     state.schema = schema;
 

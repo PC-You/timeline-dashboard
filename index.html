@@ -12,6 +12,19 @@
   Copyright:
     © 2026 Jordan Roberts
 
+  v0.4.6 — Favicon, theme-aware note indicators, scroll-state hardening
+    - Favicon ships (rhombus with note-dogear corner fold)
+    - Note indicators now pulled from the active palette (fixes invisibility on Teal/Blue themes)
+    - Defensive geometry/scroll reset on re-ingest
+
+  v0.4.5 — Date picker, settings polish, module split, test harness
+    - Date column picker modal on CSV load
+    - Conditional month color picker (hidden until enabled)
+    - Sample reset preserves theme choice
+    - Source split into constants / utils / state for testability
+    - main.js split into state-io / keyboard / help-modal / settings-modal
+    - Hand-rolled test harness with 74 passing tests
+
   v0.4.4 — Bug fixes and polish
     - Drag & drop reliability fix
     - Improved help and back button visibility
@@ -38,7 +51,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Timeline Dashboard v0.4.4</title>
+    <title>Timeline Dashboard v0.4.6</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="alternate icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 80'%3E%3Cdefs%3E%3CradialGradient id='fg' cx='50%25' cy='50%25' r='50%25'%3E%3Cstop offset='0%25' stop-color='%23B8E636'/%3E%3Cstop offset='100%25' stop-color='%237AA528'/%3E%3C/radialGradient%3E%3C/defs%3E%3Cg transform='translate(-34.24,-34.01)' style='filter: drop-shadow(rgba(0,0,0,0.25) 2px 3px 2px);'%3E%3Cpath d='M 51.04 47.92 L 66.91 30.02 Q 73.54 22.54 80.17 30.02 L 111.91 65.83 Q 118.54 73.31 111.91 80.79 L 80.17 116.6 Q 73.54 124.08 66.91 116.6 L 35.17 80.79 Q 28.54 73.31 35.17 65.83 Z' fill='url(%23fg)' transform='rotate(-45,73.54,73.31)'/%3E%3Cpath d='M 95 32 L 107 45.5 L 95 59 Z' fill='%2304d9ff' transform='rotate(314,101,45.5)'/%3E%3C/g%3E%3C/svg%3E">
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
           rel="stylesheet">
     <link rel="stylesheet" href="css/dashboard.css">
@@ -393,18 +408,34 @@
                 <section class="help-section">
                     <h4>What will this tool be?</h4>
 
-                    <h5>Next up (v0.4.5)</h5>
+                    <h5>Next up (v0.5.0)</h5>
                     <ul>
-                        <li>Date column picker — choose the timestamp column on CSV load, with format detection (ISO,
-                            Oracle, US/EU, Unix epoch) and sample values shown per column
+                        <li>Heterogeneous records — columns become discovered properties of the data, not a fixed
+                            contract. Each record can have whatever keys it wants; the tool handles partial coverage
+                            gracefully.
                         </li>
-                        <li>Conditional month color picker — hidden unless month indicators are enabled</li>
-                        <li>Sample reset preserves theme — back button clears session state but keeps your palette
-                            choice
+                        <li>Column configuration — mark each column as visible (log table), filterable (filter facet),
+                            and/or reportable (aggregation + summaries) independently. Shrink the UI and improve
+                            performance by turning off columns you don't care about.
+                        </li>
+                        <li>Settings modal restructure — tabbed layout (General, Columns, Appearance &amp; Themes,
+                            Advanced) for easier navigation.
+                        </li>
+                        <li>Developer mode — togglable in Advanced. Opens a Developer Console for inspecting ingest
+                            decisions, parse warnings, and errors. Useful for troubleshooting and bug reports.
+                        </li>
+                        <li>Records without timestamps are dropped with a visible count (rather than causing silent
+                            errors).
                         </li>
                     </ul>
 
-                    <h5>Mid-term (v0.5.x–v0.7.x)</h5>
+                    <h5>After that (v0.5.1)</h5>
+                    <ul>
+                        <li>Light mode — full light/dark theme support with system preference auto-detection</li>
+                        <li>Custom themes — define your own accent, heatmap ramp, and note indicator colors</li>
+                    </ul>
+
+                    <h5>Mid-term (v0.6.x+)</h5>
                     <ul>
                         <li>Async audit — CSV parsing and aggregation off the main thread so the UI stays responsive on
                             large datasets
@@ -412,18 +443,29 @@
                         <li>Visible-window aggregation mode — heatmap colors scaled to what's on screen, not global, for
                             sharper outlier detection
                         </li>
-                        <li>Drill-down reports exportable as PDF or HTML</li>
+                        <li>Drill-down reports exportable as PDF or HTML, surfacing a Reporting tab in Settings</li>
                         <li>Inline visualizations: time-of-day distribution, trend lines, day-of-week patterns</li>
                         <li>Comparison mode for two filter states, time ranges, or datasets</li>
                         <li>Large file support via chunked loading</li>
                         <li>Light mode and expanded theme system</li>
                     </ul>
 
-                    <h5>Long-term (v0.7.x+)</h5>
+                    <h5>Before 1.0</h5>
                     <ul>
                         <li>Streaming data sources via WebSocket and REST APIs</li>
+                        <li>Windowed memory management for datasets larger than RAM (IndexedDB backing)</li>
                         <li>Server-hosted version with user accounts and shared dashboards</li>
-                        <li>Plugin system for custom metrics, columns, and integrations</li>
+                        <li>Concurrent annotation with conflict resolution</li>
+                        <li>Mobile UI with touch-first layout and responsive breakpoints</li>
+                    </ul>
+                    <p class="settings-description">
+                        1.0 ships when the founding vision is complete — no target date, no version-number ramp.
+                        It arrives when it arrives.
+                    </p>
+
+                    <h5>Post-1.0</h5>
+                    <ul>
+                        <li>Plugin system for custom metrics, columns, and integrations (Jira, Slack, PagerDuty)</li>
                         <li>Embeddable widget for other web applications</li>
                     </ul>
                 </section>
@@ -447,6 +489,26 @@
 
             <!-- TAB: What's New -->
             <div class="help-panel" id="helpPanelChangelog" style="display:none;">
+
+                <section class="help-section">
+                    <h4>v0.4.6</h4>
+                    <ul>
+                        <li>Favicon — the tool now has its own icon in browser tabs and bookmarks</li>
+                        <li>Note indicators now follow the active theme — previously hard-to-see cyan indicators on Teal and Blue palettes are now palette-appropriate and readable</li>
+                        <li>Internal: defensive reset of scroll and geometry state when re-loading a file, to prevent a reported edge case where scroll got stuck</li>
+                    </ul>
+                </section>
+
+                <section class="help-section">
+                    <h4>v0.4.5</h4>
+                    <ul>
+                        <li>Date column picker — choose which column to use as the time axis when loading a CSV, with detected format and sample values per column</li>
+                        <li>Month indicator color picker is now hidden unless month boundaries are enabled</li>
+                        <li>Sample reset (back button from sample data) preserves your theme choice</li>
+                        <li>Internal: source split into smaller modules (constants, utils, state, state-io, keyboard, modals) for easier development</li>
+                        <li>Internal: hand-rolled test harness added with 74 tests covering pure logic</li>
+                    </ul>
+                </section>
 
                 <section class="help-section">
                     <h4>v0.4.4</h4>
@@ -574,7 +636,7 @@
             </button>
             <a class="help-footer-link" href="https://github.com/pc-you/timeline-dashboard/issues" target="_blank"
                rel="noopener" title="Open issues on GitHub">GitHub Issues</a>
-            <span class="help-footer-version">v0.4.4</span>
+            <span class="help-footer-version">v0.4.6</span>
         </div>
     </div>
 </div>
@@ -609,8 +671,15 @@
                 <label class="settings-toggle">
                     <input type="checkbox" id="settingsMonthPadding">
                     <span>Show month boundary indicators</span>
-                    <input type="color" id="settingsMonthColor" value="#ffffff" class="settings-color-input"
-                           title="Indicator color">
+                </label>
+                <label class="settings-subrow" id="settingsMonthColorRow" style="display:none;">
+                    <span class="settings-subrow-label">
+                        <svg class="settings-dropper-icon" viewBox="0 0 24 24" width="14" height="14">
+                            <path d="M19.07 4.93l-1.41-1.41c-.78-.78-2.05-.78-2.83 0l-3.54 3.54-1.06-1.06-1.41 1.41 1.06 1.06L3 15.34V21h5.66l7.48-7.48 1.06 1.06 1.41-1.41-1.06-1.06 3.54-3.54c.77-.78.77-2.05-.02-2.64z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                        </svg>
+                        Indicator color
+                    </span>
+                    <input type="color" id="settingsMonthColor" value="#ffffff" class="settings-color-input" title="Indicator color">
                 </label>
             </section>
 
@@ -647,12 +716,34 @@
             <button class="note-modal-close" id="noteModalClose">&times;</button>
         </div>
         <div class="note-modal-body">
+            <label for="noteTextarea" class="sr-only">Note text</label>
             <textarea class="note-textarea" id="noteTextarea" placeholder="Enter your note..."></textarea>
         </div>
         <div class="note-modal-footer">
             <button class="note-delete-btn" id="noteDeleteBtn" style="display:none;">Delete</button>
             <button class="note-cancel-btn" id="noteCancelBtn">Cancel</button>
             <button class="note-save-btn" id="noteSaveBtn">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Date column picker modal -->
+<div id="datePickerOverlay" class="help-modal-overlay" style="display:none;">
+    <div class="help-modal date-picker-modal">
+        <div class="help-modal-header">
+            <h3>Which column contains the date?</h3>
+            <button class="help-modal-close" id="datePickerClose">&times;</button>
+        </div>
+        <div class="help-modal-body">
+            <p class="settings-description">
+                We'll use this column as the time axis for the heatmap. Higher confidence means more values in
+                that column parsed cleanly as dates. You can always change this later by reloading the CSV.
+            </p>
+            <div id="datePickerList" class="date-picker-list"></div>
+        </div>
+        <div class="date-picker-footer">
+            <button class="note-cancel-btn" id="datePickerCancel">Cancel</button>
+            <button class="note-save-btn" id="datePickerConfirm">Use this column</button>
         </div>
     </div>
 </div>

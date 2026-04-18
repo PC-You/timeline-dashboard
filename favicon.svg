@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+<defs>
+<radialGradient id="fg" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#B8E636"/>
+<stop offset="100%" stop-color="#7AA528"/>
+</radialGradient>
+</defs>
+<g transform="translate(-34.24,-34.01)" style="filter: drop-shadow(rgba(0,0,0,0.25) 2px 3px 2px);">
+<path d="M 51.04 47.92 L 66.91 30.02 Q 73.54 22.54 80.17 30.02 L 111.91 65.83 Q 118.54 73.31 111.91 80.79 L 80.17 116.6 Q 73.54 124.08 66.91 116.6 L 35.17 80.79 Q 28.54 73.31 35.17 65.83 Z" fill="url(#fg)" transform="rotate(-45,73.54,73.31)"/>
+<path d="M 95 32 L 107 45.5 L 95 59 Z" fill="#04d9ff" transform="rotate(314,101,45.5)"/>
+</g>
+</svg>

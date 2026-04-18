@@ -2,7 +2,7 @@
  * schema.js — Schema detection, definition, and defaults
  */
 
-const TIMESTAMP_ALIASES = ['timestamp', 'ts', 'datetime', 'date', 'time', 'created_at', 'created', 'occurred', 'event_time', 'event_date'];
+export const TIMESTAMP_ALIASES = ['timestamp', 'ts', 'datetime', 'date', 'time', 'created_at', 'created', 'occurred', 'event_time', 'event_date'];
 
 const MONTH_NAMES = {
     jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2, apr: 3, april: 3,
@@ -134,13 +134,20 @@ export function toNormalizedISO(date) {
 
 // ===== Schema detection =====
 
-export function detectSchema(headers, records) {
+export function detectSchema(headers, records, override) {
     const lowerHeaders = headers.map(h => h.toLowerCase().trim());
-    let tsIdx = lowerHeaders.findIndex(h => TIMESTAMP_ALIASES.includes(h));
-    if (tsIdx === -1) tsIdx = 0;
-    const tsKey = lowerHeaders[tsIdx];
-    const tsSamples = (records || []).slice(0, 30).map(r => r[tsKey]).filter(Boolean);
-    const timestampFormat = detectTimestampFormat(tsSamples);
+    let tsKey, timestampFormat;
+    if (override && override.timestampKey) {
+        tsKey = override.timestampKey;
+        timestampFormat = override.timestampFormat || 'iso';
+    } else {
+        let tsIdx = lowerHeaders.findIndex(h => TIMESTAMP_ALIASES.includes(h));
+        if (tsIdx === -1) tsIdx = 0;
+        tsKey = lowerHeaders[tsIdx];
+        const tsSamples = (records || []).slice(0, 30).map(r => r[tsKey]).filter(Boolean);
+        timestampFormat = detectTimestampFormat(tsSamples);
+    }
+    const tsIdx = lowerHeaders.indexOf(tsKey);
 
     const columns = headers.map((h, i) => ({
         key: lowerHeaders[i],
