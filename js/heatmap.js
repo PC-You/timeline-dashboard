@@ -2,19 +2,19 @@
  * heatmap.js — Heatmap rendering, tooltips, cell interactions, data source indicator
  */
 
+import {MAX_LOG_ROWS} from './constants.js';
+import {dateKey, getLevel, monthKeyFromDate} from './utils.js';
 import {
     state,
     config,
     app,
     keysHeld,
-    dateKey,
-    getLevel,
-    MAX_LOG_ROWS,
-    monthKeyFromDate,
     clearAllSelections,
-    settings
+    settings,
+    pushSelectionSnapshot
 } from './state.js';
 import {getEffectiveThresholds} from './data.js';
+import {logger} from './logger.js';
 import {hasDayNote, refreshNoteIndicators} from './notes.js';
 import {
     refreshAllHighlights,
@@ -26,7 +26,6 @@ import {
     selectYear,
     selectWeek
 } from './highlights.js';
-import {pushSelectionSnapshot} from './state.js';
 
 // ===== Tooltip =====
 
@@ -75,10 +74,20 @@ function updateDataSourceIndicator() {
     const ds = state.dataSource;
     if (!ds) {
         el.textContent = '';
+        el.title = '';
         if (resetBtn) resetBtn.style.display = 'none';
         return;
     }
-    el.textContent = `${ds.name} \u00b7 ${ds.recordCount.toLocaleString()} records`;
+    const stats = state.ingestStats;
+    const dropped = stats?.droppedNoTimestamp || 0;
+    const base = `${ds.name} \u00b7 ${ds.recordCount.toLocaleString()} records`;
+    if (dropped > 0) {
+        el.textContent = `${base} \u00b7 ${dropped.toLocaleString()} excluded`;
+        el.title = `${dropped} record(s) were dropped during ingest because they had no timestamp. See the developer console for details.`;
+    } else {
+        el.textContent = base;
+        el.title = '';
+    }
     if (resetBtn) resetBtn.style.display = ds.type === 'sample' ? '' : 'none';
 }
 
@@ -200,6 +209,22 @@ export function renderHeatmap() {
     refreshNoteIndicators();
     refreshAllHighlights();
     updateDataSourceIndicator();
+
+    // Log post-render dimensions so scroll-stuck bug can be diagnosed.
+    // Comparing rendered weekIdx (= track column count) against state.years geometry
+    // tells us whether heatmap and geometry agree on how many weeks exist.
+    if (logger.enabled) {
+        const scrollWidth = track.scrollWidth;
+        const inner = track.parentElement;
+        const clientWidth = inner ? inner.clientWidth : 0;
+        logger.info('geometry', `Heatmap rendered: ${weekIdx} week columns, scrollWidth=${scrollWidth}px`, {
+            renderedWeeks: weekIdx,
+            trackColumns: track.children.length,
+            scrollWidth,
+            clientWidth,
+            maxScrollLeft: Math.max(0, scrollWidth - clientWidth),
+        });
+    }
 }
 
 function formatMetricValue(value) {

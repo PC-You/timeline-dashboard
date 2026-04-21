@@ -7,8 +7,9 @@ build.sh
 bump.sh
 
 # Internal development docs
-HANDOFF.md
+DEV_CONTEXT.md
 CHANGELOG.md
+ideas.md
 _deprecated/
 
 # Editor / OS

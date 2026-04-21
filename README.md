@@ -117,10 +117,12 @@ To add a new data source (REST API, WebSocket, etc.): fetch records as plain obj
 
 See [SOW.md](SOW.md) for the full scope of work. Short version:
 
-- **v0.4.x (current)** — Polish and sample data expansion. Date column picker and async support in progress.
-- **v0.5–0.7** — Drill-down reports, inline visualizations, comparison mode, chunked CSV loading.
-- **v0.7–0.9** — Streaming data sources, windowed memory management, collaboration features.
-- **v1.0+** — Plugin system, embeddable widget.
+- **v0.4.x (current)** — Polish and sample data expansion. Date column picker, module split, test harness.
+- **v0.5.0 (next)** — Heterogeneous data model, column configuration, developer mode, settings modal restructure.
+- **v0.6–0.7** — Drill-down reports, inline visualizations, comparison mode, chunked CSV loading, async pipeline.
+- **v0.8+** — Streaming data sources, windowed memory management, collaboration features, mobile UI.
+- **1.0** — Ships when the founding vision is complete. No target date.
+- **Post-1.0** — Plugin system, embeddable widget.
 
 ## Contributing
 

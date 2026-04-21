@@ -2,17 +2,9 @@
  * content.js — Main content area rendering (stats, log table, summary)
  */
 
-import {
-    state,
-    app,
-    dateKey,
-    escapeHtml,
-    MAX_LOG_ROWS,
-    clearAllSelections,
-    hasAnySelections,
-    hasAnyHighlightFilters,
-    settings
-} from './state.js';
+import {MAX_LOG_ROWS} from './constants.js';
+import {dateKey, escapeHtml} from './utils.js';
+import {state, app, clearAllSelections, hasAnySelections, hasAnyHighlightFilters, settings, effectiveLogColumns} from './state.js';
 import {hasDayNote, getRowNote, openNoteModal} from './notes.js';
 import {getHighlightSummary, getSelectedDays, refreshAllHighlights} from './highlights.js';
 import {generateSampleData, generateFinancialData, generateTicketingData} from './csv.js';
@@ -25,23 +17,10 @@ function metricBadge(entries) {
     return ` <span class="metric-badge">\u00b7 ${escapeHtml(preset.label)}: ${formatSummaryValue(value)}</span>`;
 }
 
-function metricBadgeFromDays(dayKeys) {
-    const preset = state.metricPresets?.[state.activeMetricIndex];
-    if (!preset || preset.type === 'count') return '';
-    const allEntries = [];
-    dayKeys.forEach(dk => {
-        const e = state.dayEntries[dk];
-        if (e) allEntries.push(...e);
-    });
-    if (allEntries.length === 0) return '';
-    const value = aggregateEntries(allEntries, {type: preset.type, column: preset.column});
-    return ` <span class="metric-badge">\u00b7 ${escapeHtml(preset.label)}: ${formatSummaryValue(value)}</span>`;
-}
-
 function buildSortableHeaders(schema) {
     const tsKey = schema.timestampKey;
     const activeCol = state.sortColumn || tsKey;
-    return '<th style="width:28px"></th>' + schema.logColumns.map(col => {
+    return '<th style="width:28px"></th>' + effectiveLogColumns().map(col => {
         const key = col.keys ? col.keys[0] : col.key;
         const isActive = key === activeCol;
         const arrow = isActive ? (state.sortDirection === 'asc' ? ' \u25B4' : ' \u25BE') : '';
@@ -53,11 +32,18 @@ function sortEntries(entries, schema) {
     const tsKey = schema.timestampKey;
     const col = state.sortColumn || tsKey;
     const dir = state.sortDirection === 'desc' ? -1 : 1;
+    // ISO timestamps like "2026-01-15T09:00:00" are lexicographically sortable by
+    // design — and parseFloat on them returns just the year, which is identical for
+    // records on the same day and defeats the sort. So: when sorting by the timestamp
+    // column, always compare as strings.
+    const isTimestampSort = col === tsKey;
     return entries.slice().sort((a, b) => {
         const va = a[col] ?? '';
         const vb = b[col] ?? '';
-        const na = parseFloat(va), nb = parseFloat(vb);
-        if (!isNaN(na) && !isNaN(nb)) return (na - nb) * dir;
+        if (!isTimestampSort) {
+            const na = parseFloat(va), nb = parseFloat(vb);
+            if (!isNaN(na) && !isNaN(nb)) return (na - nb) * dir;
+        }
         return String(va).localeCompare(String(vb)) * dir;
     });
 }
@@ -123,10 +109,11 @@ export function renderContent() {
                 else result = generateSampleData();
                 ingest(result.records, result.schema);
                 const labels = {database: 'Database Audit', financial: 'Financial', ticketing: 'IT Ticketing'};
+                const kept = state.ingestStats?.keptCount ?? result.records.length;
                 state.dataSource = {
                     name: `Sample Data \u2014 ${labels[type]}`,
                     type: 'sample',
-                    recordCount: result.records.length
+                    recordCount: kept
                 };
                 app.fullRender();
             });
@@ -244,7 +231,7 @@ export function renderContent() {
     // Build log HTML
     let logHTML;
     if (hasAnySelections()) {
-        logHTML = buildMultiSelectView(schema, metric, metricTotalLabel);
+        logHTML = buildMultiSelectView(schema, metric);
     } else if (state.selectedDate) {
         logHTML = buildSingleDayLog(state.selectedDate, schema, metric, metricTotalLabel);
     } else {
@@ -274,7 +261,7 @@ export function renderContent() {
 
 // ===== Multi-select two-tier view =====
 
-function buildMultiSelectView(schema, metric, metricTotalLabel) {
+function buildMultiSelectView(schema, metric) {
     const allDays = getSelectedDays();
     if (allDays.length === 0) return '';
 
@@ -300,7 +287,7 @@ function buildMultiSelectView(schema, metric, metricTotalLabel) {
     // Build collapsed list
     let collapsedHTML = '';
     if (collapsed.length > 0) {
-        const rows = collapsed.map(dk => buildCollapsedRow(dk, schema, metric)).join('');
+        const rows = collapsed.map(dk => buildCollapsedRow(dk, schema)).join('');
         collapsedHTML = `
       <div class="day-log collapsed-list">
         <div class="day-log-header">
@@ -317,7 +304,6 @@ function buildFocusedDayLog(dk, schema, metric) {
     const entries = state.dayEntries[dk] || [];
     const sorted = sortEntries(entries, schema);
     const display = sorted.slice(0, MAX_LOG_ROWS);
-    const remaining = sorted.length - MAX_LOG_ROWS;
     const d = new Date(dk + 'T00:00:00');
     const formatted = d.toLocaleDateString('en-US', {weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'});
     const dayHasNote = hasDayNote(dk);
@@ -354,7 +340,7 @@ function buildFocusedDayLog(dk, schema, metric) {
     </div>`;
 }
 
-function buildCollapsedRow(dk, schema, metric) {
+function buildCollapsedRow(dk, schema) {
     const entries = state.dayEntries[dk] || [];
     const count = entries.length;
     const d = new Date(dk + 'T00:00:00');
@@ -443,8 +429,9 @@ function buildRowsHTML(records, dk, startIdx, schema) {
         const idx = startIdx + i;
         const rn = getRowNote(dk, idx);
         const noteBtn = `<td style="padding:4px 4px 4px 12px;"><button class="row-note-btn ${rn ? 'has-note' : ''}" data-row-idx="${idx}" data-row-date="${dk}" title="${rn ? 'Edit row note' : 'Add row note'}"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button></td>`;
-        const cells = schema.logColumns.map(col => renderCell(r, col, schema)).join('');
-        const noteRow = rn ? renderRowNoteRow(rn, schema.logColumns.length) : '';
+        const cols = effectiveLogColumns();
+        const cells = cols.map(col => renderCell(r, col, schema)).join('');
+        const noteRow = rn ? renderRowNoteRow(rn, cols.length) : '';
         return `<tr>${noteBtn}${cells}</tr>${noteRow}`;
     }).join('');
 }
@@ -697,8 +684,4 @@ function getHighlightColorForCell(record, colDef) {
 function formatSummaryValue(value) {
     if (Number.isInteger(value)) return value.toLocaleString();
     return value.toLocaleString(undefined, {maximumFractionDigits: 1});
-}
-
-function capitalize(str) {
-    return str.charAt(0).toUpperCase() + str.slice(1);
 }

@@ -2,7 +2,7 @@
  * schema.js — Schema detection, definition, and defaults
  */
 
-const TIMESTAMP_ALIASES = ['timestamp', 'ts', 'datetime', 'date', 'time', 'created_at', 'created', 'occurred', 'event_time', 'event_date'];
+export const TIMESTAMP_ALIASES = ['timestamp', 'ts', 'datetime', 'date', 'time', 'created_at', 'created', 'occurred', 'event_time', 'event_date'];
 
 const MONTH_NAMES = {
     jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2, apr: 3, april: 3,
@@ -134,33 +134,37 @@ export function toNormalizedISO(date) {
 
 // ===== Schema detection =====
 
-export function detectSchema(headers, records) {
+export function detectSchema(headers, records, override) {
     const lowerHeaders = headers.map(h => h.toLowerCase().trim());
-    let tsIdx = lowerHeaders.findIndex(h => TIMESTAMP_ALIASES.includes(h));
-    if (tsIdx === -1) tsIdx = 0;
-    const tsKey = lowerHeaders[tsIdx];
-    const tsSamples = (records || []).slice(0, 30).map(r => r[tsKey]).filter(Boolean);
-    const timestampFormat = detectTimestampFormat(tsSamples);
+    let tsKey, timestampFormat;
+    if (override && override.timestampKey) {
+        tsKey = override.timestampKey;
+        timestampFormat = override.timestampFormat || 'iso';
+    } else {
+        let tsIdx = lowerHeaders.findIndex(h => TIMESTAMP_ALIASES.includes(h));
+        if (tsIdx === -1) tsIdx = 0;
+        tsKey = lowerHeaders[tsIdx];
+        const tsSamples = (records || []).slice(0, 30).map(r => r[tsKey]).filter(Boolean);
+        timestampFormat = detectTimestampFormat(tsSamples);
+    }
+    const tsIdx = lowerHeaders.indexOf(tsKey);
 
+    // Assign displayOrder at schema detection time — the schema owns ordering,
+    // downstream iteration sorts by displayOrder rather than array position.
+    // For CSV this is simply the header index. JSON/streaming sources will pick
+    // their own heuristic (first-seen key order, schema-declared order, etc.).
     const columns = headers.map((h, i) => ({
         key: lowerHeaders[i],
         header: h,
         type: i === tsIdx ? 'datetime' : 'text',
+        displayOrder: i,
     }));
     const nonTsCols = columns.filter(c => c.type !== 'datetime').map(c => c.key);
 
-    // Detect numeric columns by sampling first 50 records
+    // Numeric column detection is now performed in data.js#detectNumericColumns() against
+    // the full record set rather than a 50-row sample. We declare an empty array here;
+    // ingest() populates it.
     const numericColumns = [];
-    const sampleRows = (records || []).slice(0, 50);
-    nonTsCols.forEach(col => {
-        if (sampleRows.length === 0) return;
-        const vals = sampleRows.map(r => r[col]).filter(v => v != null && v !== '');
-        const numCount = vals.filter(v => !isNaN(parseFloat(v))).length;
-        if (numCount > vals.length * 0.8 && vals.length > 0) {
-            const hasNegative = vals.some(v => parseFloat(v) < 0);
-            numericColumns.push({key: col, header: columns.find(c => c.key === col).header, hasNegative});
-        }
-    });
 
     const logColumns = [
         {key: tsKey, label: 'Time', display: 'time'},
@@ -179,6 +183,7 @@ export function detectSchema(headers, records) {
         visibleFilterColumns: nonTsCols.slice(0, 4),
         logColumns,
         numericColumns,
+        columnStats: {},
         heatmapMetric: {type: 'count', column: null, label: 'record', labelPlural: 'records', thresholds: null},
         badgeColumn: null,
         badgeColors: {},
@@ -188,8 +193,24 @@ export function detectSchema(headers, records) {
     };
 }
 
+/**
+ * Post-process a sample-data schema object, assigning displayOrder to each column
+ * based on its declaration order and seeding empty columnStats. This keeps the
+ * sample schemas readable (no manual displayOrder bookkeeping) while aligning
+ * them with the v0.5.0 schema shape that detectSchema() produces.
+ *
+ * detectSchema() assigns displayOrder inline; sample schemas go through this helper.
+ */
+function finalizeSchema(schema) {
+    (schema.columns || []).forEach((col, i) => {
+        if (col.displayOrder == null) col.displayOrder = i;
+    });
+    if (!schema.columnStats) schema.columnStats = {};
+    return schema;
+}
+
 export function sampleDataSchema() {
-    return {
+    return finalizeSchema({
         columns: [
             {key: 'timestamp', header: 'Timestamp', type: 'datetime'},
             {key: 'contributor', header: 'Contributor', type: 'text'},
@@ -220,11 +241,11 @@ export function sampleDataSchema() {
         primaryColumn: 'contributor',
         secondaryColumn: 'table',
         breakdownColumn: 'action',
-    };
+    });
 }
 
 export function financialDataSchema() {
-    return {
+    return finalizeSchema({
         columns: [
             {key: 'timestamp', header: 'Timestamp', type: 'datetime'},
             {key: 'description', header: 'Description', type: 'text'},
@@ -268,11 +289,11 @@ export function financialDataSchema() {
         primaryColumn: 'category',
         secondaryColumn: 'account',
         breakdownColumn: 'category',
-    };
+    });
 }
 
 export function ticketingDataSchema() {
-    return {
+    return finalizeSchema({
         columns: [
             {key: 'timestamp', header: 'Timestamp', type: 'datetime'},
             {key: 'requestor', header: 'Requestor', type: 'text'},
@@ -316,5 +337,5 @@ export function ticketingDataSchema() {
         primaryColumn: 'assigned_tech',
         secondaryColumn: 'category',
         breakdownColumn: 'status',
-    };
+    });
 }

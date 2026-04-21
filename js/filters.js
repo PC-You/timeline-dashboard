@@ -2,7 +2,9 @@
  * filters.js — Schema-driven faceted filters with slide toggle and color picker
  */
 
-import {state, app, escapeHtml, hasAnyExcludeFilters, hasAnyHighlightFilters, HIGHLIGHT_PRESETS} from './state.js';
+import {HIGHLIGHT_PRESETS} from './constants.js';
+import {escapeHtml} from './utils.js';
+import {state, app, hasAnyExcludeFilters, hasAnyHighlightFilters} from './state.js';
 import {applyFilters} from './data.js';
 
 const FACET_PAGE_SIZE = 100;
@@ -271,7 +273,7 @@ function refreshClearButton() {
     const old = bar.querySelector('.filter-clear, .clear-dropdown-wrapper');
     if (old) old.remove();
     // Add updated one
-    const clearEl = createClearButton(state.schema);
+    const clearEl = createClearButton();
     if (clearEl) bar.appendChild(clearEl);
     // Update record count
     const countEl = bar.querySelector('.filter-active-count');
@@ -281,7 +283,10 @@ function refreshClearButton() {
 function createColumnPicker(schema) {
     const wrapper = document.createElement('div');
     wrapper.className = 'facet-select';
-    const hiddenCols = schema.filterColumns.filter(c => !schema.visibleFilterColumns.includes(c));
+    const cfg = state.columnConfig || {};
+    const isFilterable = (col) => cfg[col] ? cfg[col].filterable : true;
+    const filterableCols = schema.filterColumns.filter(isFilterable);
+    const hiddenCols = filterableCols.filter(c => !schema.visibleFilterColumns.includes(c));
     if (hiddenCols.length === 0) return null;
 
     const trigger = document.createElement('div');
@@ -297,7 +302,7 @@ function createColumnPicker(schema) {
 
     const render = () => {
         optionsContainer.innerHTML = '';
-        schema.filterColumns.forEach(col => {
+        filterableCols.forEach(col => {
             const colDef = schema.columns.find(c => c.key === col);
             const label = colDef ? colDef.header : col;
             const isVisible = schema.visibleFilterColumns.includes(col);
@@ -332,7 +337,7 @@ function createColumnPicker(schema) {
     return wrapper;
 }
 
-function createClearButton(schema) {
+function createClearButton() {
     const hasExclude = hasAnyExcludeFilters();
     const hasHighlight = hasAnyHighlightFilters();
     if (!hasExclude && !hasHighlight) return null;
@@ -408,7 +413,9 @@ export function renderFilterBar(reopenCol) {
     bar.innerHTML = '';
 
     const schema = state.schema;
-    const visibleCols = schema.visibleFilterColumns;
+    const cfg = state.columnConfig || {};
+    const isFilterable = (col) => cfg[col] ? cfg[col].filterable : true;
+    const visibleCols = schema.visibleFilterColumns.filter(isFilterable);
 
     visibleCols.forEach(col => {
         const colDef = schema.columns.find(c => c.key === col);
@@ -437,7 +444,7 @@ export function renderFilterBar(reopenCol) {
     countSpan.textContent = `${state.filtered.length.toLocaleString()} ${schema.heatmapMetric.labelPlural || 'records'}`;
     bar.appendChild(countSpan);
 
-    const clearEl = createClearButton(schema);
+    const clearEl = createClearButton();
     if (clearEl) bar.appendChild(clearEl);
 
     // Re-open a specific column's dropdown after re-render

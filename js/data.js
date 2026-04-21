@@ -1,19 +1,87 @@
 /*
- * data.js — Data pipeline: ingest, indexing, filtering, aggregation, geometry
+ * data.js — Data pipeline: ingest, indexing, filtering, aggregation, geometry.
+ *
+ * v0.5.0 rebuild: records are treated as documents (heterogeneous). Records without
+ * a timestamp are dropped and their count surfaced. Column union, cardinality, and
+ * coverage are computed across the full record set, not a 50-row sample.
  */
 
-import {state, MONTHS, WEEK_PX, dateKeyFromStr, autoThresholds} from './state.js';
+import {MONTHS, WEEK_PX} from './constants.js';
+import {dateKeyFromStr, autoThresholds} from './utils.js';
+import {state} from './state.js';
 import {parseTimestamp, toNormalizedISO} from './schema.js';
+import {logger} from './logger.js';
 
 export function ingest(records, schema) {
+    const inputCount = records.length;
+
     if (schema.timestampFormat && schema.timestampFormat !== 'iso') {
         normalizeTimestamps(records, schema);
     }
+
+    // Drop records without a timestamp. A record without a timestamp can't be placed
+    // on the heatmap; the tool's entire premise requires time. Log what we dropped so
+    // the user can investigate via the developer console if they notice a count mismatch.
+    const tsKey = schema.timestampKey;
+    const kept = [];
+    let droppedNoTimestamp = 0;
+    for (const r of records) {
+        const v = r[tsKey];
+        if (v == null || v === '') {
+            droppedNoTimestamp++;
+            continue;
+        }
+        kept.push(r);
+    }
+    if (droppedNoTimestamp > 0) {
+        logger.warn('ingest', `Dropped ${droppedNoTimestamp} record(s) with no timestamp`, {
+            column: tsKey,
+            inputCount,
+            keptCount: kept.length,
+        });
+    }
+    records = kept;
+
+    // Defensive reset: explicitly clear geometry-derived state before rebuilding.
+    // Protects against a v0.4.x bug where re-dragging the same file over an
+    // already-loaded dataset left scroll stuck at an arbitrary point.
+    state.years = [];
+    state.allYears = [];
+    state.activeYear = null;
+    state.yearWeekRanges = {};
+    state.monthPositions = [];
+    state.selectedDate = null;
+
     state.raw = records;
     state.schema = schema;
+    state.ingestStats = {
+        inputCount,
+        keptCount: records.length,
+        droppedNoTimestamp,
+    };
 
-    // Detect numeric columns from actual data (runs for both CSV and sample data)
+    logger.info('ingest', `Ingested ${records.length} records`, {
+        inputCount,
+        droppedNoTimestamp,
+        columns: schema.columns?.length ?? 0,
+    });
+
+    // Detect numeric columns and cardinality across all records (not a 50-row sample)
     detectNumericColumns(records, schema);
+    computeColumnStats(records, schema);
+
+    // Column config: auto-detected defaults, merged with any existing user overrides
+    // for columns of the same name. This preserves config across re-ingest of the same
+    // file and across column-order changes between file versions.
+    const defaults = defaultColumnConfig(schema);
+    const existing = state.columnConfig || {};
+    const mergedConfig = {};
+    Object.keys(defaults).forEach(col => {
+        mergedConfig[col] = existing[col]
+            ? {...defaults[col], ...existing[col]}
+            : defaults[col];
+    });
+    state.columnConfig = mergedConfig;
 
     // Build default metric presets if none exist
     if (state.metricPresets.length === 0) {
@@ -37,28 +105,119 @@ export function ingest(records, schema) {
     applyFilters();
 }
 
-function detectNumericColumns(records, schema) {
-    const sampleRows = records.slice(0, 50);
+export function detectNumericColumns(records, schema) {
+    // v0.5.0: scan all records (was: first 50). Heterogeneous records may have
+    // numeric columns that don't appear until later in the dataset.
     const nonTsCols = schema.filterColumns || [];
     const numericColumns = [];
     nonTsCols.forEach(col => {
-        if (sampleRows.length === 0) return;
-        const vals = sampleRows.map(r => r[col]).filter(v => v != null && v !== '');
-        const numCount = vals.filter(v => !isNaN(parseFloat(v))).length;
-        if (numCount > vals.length * 0.8 && vals.length > 0) {
-            const hasNegative = vals.some(v => parseFloat(v) < 0);
+        const vals = [];
+        for (const r of records) {
+            const v = r[col];
+            if (v != null && v !== '') vals.push(v);
+        }
+        if (vals.length === 0) return;
+        let numCount = 0;
+        let hasNegative = false;
+        for (const v of vals) {
+            const n = parseFloat(v);
+            if (!isNaN(n)) {
+                numCount++;
+                if (n < 0) hasNegative = true;
+            }
+        }
+        if (numCount > vals.length * 0.8) {
             const header = schema.columns.find(c => c.key === col)?.header || col;
             numericColumns.push({key: col, header, hasNegative});
         }
     });
     schema.numericColumns = numericColumns;
+    logger.info('schema', `Detected ${numericColumns.length} numeric column(s)`, {
+        keys: numericColumns.map(c => c.key),
+    });
+}
+
+/**
+ * Compute per-column cardinality and coverage across the full record set.
+ * Populates schema.columnStats = { [key]: { uniqueCount, coverage, covered } }
+ * where coverage ∈ [0,1] is the fraction of records with this column present.
+ *
+ * Used by the v0.5.0 column-config UI to show "text · N unique · in X% of records"
+ * and to help the user decide which columns to mark filterable/reportable.
+ */
+export function computeColumnStats(records, schema) {
+    const stats = {};
+    const total = records.length || 1;
+    const cols = schema.columns || [];
+    cols.forEach(c => {
+        const unique = new Set();
+        let covered = 0;
+        for (const r of records) {
+            const v = r[c.key];
+            if (v != null && v !== '') {
+                covered++;
+                unique.add(v);
+            }
+        }
+        stats[c.key] = {
+            uniqueCount: unique.size,
+            covered,
+            coverage: covered / total,
+        };
+    });
+    schema.columnStats = stats;
+}
+
+/**
+ * Compute auto-detected default column config from schema + stats.
+ * Returns { [columnKey]: {visible, filterable, reportable} }.
+ *
+ * Heuristic (v0.5.0):
+ *   - Timestamp column: always {visible:true, filterable:false, reportable:true}, locked.
+ *   - Numeric column:   {visible:true, filterable:false, reportable:true}.
+ *   - Text with uniqueCount < 50:  all three true (good filter facet).
+ *   - Text with uniqueCount >= 50: {visible:true, filterable:false, reportable:false}
+ *     (too unique for useful filtering/aggregation).
+ *   - Text with coverage < 0.05: all three false (barely-populated, hide by default).
+ *
+ * The user can override any of these via the Columns settings tab; overrides persist
+ * in state export. This function produces defaults only — it does not apply user overrides.
+ */
+export function defaultColumnConfig(schema) {
+    const config = {};
+    const cols = schema.columns || [];
+    const numericKeys = new Set((schema.numericColumns || []).map(c => c.key));
+    const stats = schema.columnStats || {};
+    cols.forEach(c => {
+        const s = stats[c.key] || {uniqueCount: 0, coverage: 0};
+        if (c.key === schema.timestampKey) {
+            config[c.key] = {visible: true, filterable: false, reportable: true};
+            return;
+        }
+        if (s.coverage < 0.05) {
+            config[c.key] = {visible: false, filterable: false, reportable: false};
+            return;
+        }
+        if (numericKeys.has(c.key)) {
+            config[c.key] = {visible: true, filterable: false, reportable: true};
+            return;
+        }
+        if (s.uniqueCount < 50) {
+            config[c.key] = {visible: true, filterable: true, reportable: true};
+            return;
+        }
+        config[c.key] = {visible: true, filterable: false, reportable: false};
+    });
+    return config;
 }
 
 function normalizeTimestamps(records, schema) {
     const tsKey = schema.timestampKey;
     const fmt = schema.timestampFormat;
     if (fmt === 'oracle-dmy') {
-        console.warn(`Timestamp format is Oracle DD-MON-YY (date only). Time component cannot be determined; defaulting to 00:00:00.`);
+        logger.warn('schema', 'Oracle DD-MON-YY has no time component; defaulting to 00:00:00', {
+            column: tsKey,
+        });
     }
     let failures = 0;
     for (const r of records) {
@@ -68,7 +227,12 @@ function normalizeTimestamps(records, schema) {
         if (date) r[tsKey] = toNormalizedISO(date);
         else failures++;
     }
-    if (failures > 0) console.warn(`Timestamp normalisation: ${failures} of ${records.length} values could not be parsed (format: ${fmt})`);
+    if (failures > 0) {
+        logger.warn('schema', `Timestamp normalisation failed for ${failures} of ${records.length} value(s)`, {
+            format: fmt,
+            column: tsKey,
+        });
+    }
     schema.timestampFormat = 'iso';
 }
 
@@ -124,12 +288,24 @@ export function applyFilters() {
         state.filterModes[col] !== 'highlight' && state.filters[col]?.size > 0
     );
     if (hasExcludeFilters) {
-        // Only show years that have at least one record after filtering
-        const filteredYearSet = new Set();
+        // Find first and last years with records after filtering. Only *edge* years
+        // get pruned — empty years in the middle of the filtered range are kept so
+        // the timeline stays continuous and arrow-key navigation works across them.
+        // Prior behavior: also pruned middle empty years, which broke cross-year
+        // navigation and visually misaligned adjacent non-empty years.
+        const populatedYears = new Set();
         for (const dk in state.dayValues) {
-            if (state.dayValues[dk] !== 0) filteredYearSet.add(parseInt(dk.substring(0, 4)));
+            if (state.dayValues[dk] !== 0) populatedYears.add(parseInt(dk.substring(0, 4)));
         }
-        state.years = filteredYearSet.size > 0 ? Array.from(filteredYearSet).sort() : state.allYears;
+        if (populatedYears.size > 0) {
+            const sorted = Array.from(populatedYears).sort();
+            const firstYear = sorted[0];
+            const lastYear = sorted[sorted.length - 1];
+            // Take every allYear in [firstYear, lastYear] inclusive
+            state.years = state.allYears.filter(y => y >= firstYear && y <= lastYear);
+        } else {
+            state.years = state.allYears;
+        }
     } else {
         state.years = state.allYears;
     }
@@ -276,5 +452,11 @@ export function buildGeometry() {
         state.yearWeekRanges[year] = {start: startWeek, end: weekIndex};
         // Match the spacer column from renderHeatmap
         if (yearIdx < state.years.length - 1 && dec31.getDay() === 6) weekIndex++;
+    });
+    logger.info('geometry', `Built geometry: ${state.years.length} year(s), ${weekIndex} total weeks`, {
+        years: state.years,
+        totalWeeks: weekIndex,
+        yearRanges: state.yearWeekRanges,
+        expectedPx: weekIndex * WEEK_PX,
     });
 }

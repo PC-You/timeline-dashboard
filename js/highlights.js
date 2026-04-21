@@ -2,19 +2,9 @@
  * highlights.js — Selection highlighting: row, column, day, month, week, filter
  */
 
-import {
-    state,
-    app,
-    MONTHS,
-    DOW_NAMES,
-    MAX_LOG_ROWS,
-    dateKey,
-    monthKeyFromDate,
-    hasAnySelections,
-    clearAllSelections,
-    hasAnyHighlightFilters,
-    pushSelectionSnapshot
-} from './state.js';
+import {MONTHS, DOW_NAMES, MAX_LOG_ROWS} from './constants.js';
+import {dateKey, monthKeyFromDate} from './utils.js';
+import {state, app, hasAnySelections, hasAnyHighlightFilters, pushSelectionSnapshot} from './state.js';
 
 export function clearDaySelection() {
     state.selectedDate = null;
@@ -189,8 +179,7 @@ function isCellHighlighted(dk, dow, wk) {
     if (state.highlightedCols.has(wk)) return true;
     if (state.highlightedDays.has(dk)) return true;
     const mk = monthKeyFromDate(dk);
-    if (state.highlightedMonths.has(mk)) return true;
-    return false;
+    return state.highlightedMonths.has(mk);
 }
 
 /**
@@ -289,8 +278,7 @@ function boostAlpha(rgbaStr, count) {
     const match = rgbaStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+),?\s*([\d.]+)?\)/);
     if (!match) return rgbaStr;
     const r = match[1], g = match[2], b = match[3];
-    const baseAlpha = parseFloat(match[4] || '1');
-    let alpha = baseAlpha;
+    let alpha = parseFloat(match[4] || '1');
     for (let i = 1; i < count; i++) {
         alpha = alpha + (0.95 - alpha) * 0.5;
     }

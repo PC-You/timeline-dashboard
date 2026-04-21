@@ -1,13 +1,9 @@
 /*
- * state.js — Shared state, constants, and utility functions
+ * state.js — Application state, user settings, and stateful selection helpers.
+ * Pure utilities are in utils.js. Constants are in constants.js.
  */
 
-export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-export const DOW_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-export const WEEK_PX = 16;
-export const MAX_LOG_ROWS = 80;
-export const AUTO_FOCUS_THRESHOLD = 7; // configurable in future settings
-export const HORIZ_SCROLL_FACTOR = 0.3;
+import { MAX_LOG_ROWS } from './constants.js';
 
 export const config = {showDayOfWeek: true};
 
@@ -17,23 +13,16 @@ export const settings = {
     monthPadding: false,        // show month boundary indicators
     monthIndicatorColor: '#ffffff', // month boundary indicator color
     autoFocusThreshold: 7,      // multi-select auto-focus limit
-    autoDetectDateColumn: true, // auto-pick timestamp column on CSV load (v0.4.5 adds picker)
+    autoDetectDateColumn: true, // auto-pick timestamp column on CSV load
+    developerMode: false,       // when true, logger records + Developer Console is accessible
 };
-
-export const HIGHLIGHT_PRESETS = [
-    {name: 'Amber', color: 'rgba(255, 180, 30, 0.75)'},
-    {name: 'Cyan', color: 'rgba(0, 220, 255, 0.70)'},
-    {name: 'Rose', color: 'rgba(255, 80, 80, 0.70)'},
-    {name: 'Violet', color: 'rgba(180, 120, 255, 0.70)'},
-    {name: 'Green', color: 'rgba(50, 230, 120, 0.70)'},
-    {name: 'Blue', color: 'rgba(70, 150, 255, 0.70)'},
-];
 
 export const state = {
     raw: [],
     filtered: [],
     schema: null,
     dataSource: null,         // { name, type, recordCount }
+    ingestStats: null,        // { inputCount, keptCount, droppedNoTimestamp } — populated by ingest()
     activePalette: 4,         // index into palettes array (green default)
 
     // Filters: { columnKey: Set of selected values }
@@ -49,6 +38,13 @@ export const state = {
 
     dayValues: {},
     dayEntries: {},
+
+    // Column config (v0.5.0): per-column user preferences.
+    // Shape: { [columnKey]: {visible, filterable, reportable} }
+    // Populated at ingest with auto-detected defaults; user overrides persist in
+    // state export. Keyed by column name (not position) so it survives CSV updates
+    // where the same columns appear in different order.
+    columnConfig: {},
 
     years: [],
     allYears: [],         // full year range from raw data (unaffected by filters)
@@ -86,43 +82,7 @@ export const app = {};
 // Global key tracker for M/Y key detection during clicks
 export const keysHeld = new Set();
 
-// ===== Utility functions =====
-
-export function dateKey(d) {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-export function dateKeyFromStr(ts) {
-    return ts.substring(0, 10);
-}
-
-export function monthKeyFromDate(dk) {
-    return dk.substring(0, 7);
-}
-
-export function getLevel(value, thresholds) {
-    if (!thresholds) thresholds = [3, 8, 18];
-    if (value === 0) return 0;
-    const abs = Math.abs(value);
-    const sign = value < 0 ? -1 : 1;
-    if (abs <= thresholds[0]) return sign * 1;
-    if (abs <= thresholds[1]) return sign * 2;
-    if (abs <= thresholds[2]) return sign * 3;
-    return sign * 4;
-}
-
-export function autoThresholds(values) {
-    const sorted = values.filter(v => v > 0).sort((a, b) => a - b);
-    if (sorted.length === 0) return [1, 2, 3];
-    const p = (pct) => sorted[Math.min(Math.floor(pct * sorted.length), sorted.length - 1)];
-    return [p(0.25), p(0.50), p(0.75)];
-}
-
-export function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
+// ===== Selection queries =====
 
 export function hasAnySelections() {
     return state.highlightedRows.size > 0 || state.highlightedCols.size > 0 ||
@@ -135,6 +95,47 @@ export function clearAllSelections() {
     state.highlightedDays.clear();
     state.highlightedMonths.clear();
     state.focusedDays.clear();
+}
+
+// ===== Column config helpers (v0.5.0) =====
+
+/**
+ * Returns the effective list of filter columns — those marked filterable in state.columnConfig.
+ * Falls back to schema.filterColumns when columnConfig is absent (e.g. before ingest).
+ * Preserves the schema's declared order.
+ */
+export function effectiveFilterColumns() {
+    if (!state.schema) return [];
+    const cfg = state.columnConfig || {};
+    return state.schema.filterColumns.filter(col => cfg[col] ? cfg[col].filterable : true);
+}
+
+/**
+ * Returns effective log columns — those marked visible in state.columnConfig.
+ * The timestamp column is always visible (config is ignored for it).
+ */
+export function effectiveLogColumns() {
+    if (!state.schema) return [];
+    const cfg = state.columnConfig || {};
+    return state.schema.logColumns.filter(col => {
+        // Multi-key columns (e.g. {keys: ['table', 'field']}) stay visible unless all parts are hidden
+        const keys = col.keys || (col.key ? [col.key] : []);
+        if (keys.length === 0) return true;
+        if (keys.includes(state.schema.timestampKey)) return true;
+        return keys.some(k => !cfg[k] || cfg[k].visible);
+    });
+}
+
+/**
+ * Returns effective reportable columns — those marked reportable in state.columnConfig.
+ * Used to gate metric preset availability.
+ */
+export function effectiveReportableColumns() {
+    if (!state.schema) return [];
+    const cfg = state.columnConfig || {};
+    return (state.schema.columns || [])
+        .filter(c => cfg[c.key] ? cfg[c.key].reportable : true)
+        .map(c => c.key);
 }
 
 export function hasAnyExcludeFilters() {
